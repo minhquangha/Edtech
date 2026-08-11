@@ -1,5 +1,4 @@
-import express, { type Express, type Request, type Response } from "express";
-import testDB from "@/utils/test-db.js";
+import express, { type Express} from "express";
 import router from "@/routes/index.js";
 const app: Express = express();
 
