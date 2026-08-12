@@ -4,5 +4,6 @@ import assignmentRouter from "@/routes/assignments.js"
 const router: Router = Router();    
 
 router.use("/users",userRouter);
+console.log(1);
 router.use("/assignments",assignmentRouter)
 export default router;

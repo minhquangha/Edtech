@@ -2,8 +2,8 @@ export interface Question {
   id: number;
   assignmentId: number;
   content: string;
-  type: "MULTIPLE_CHOICE" | "TRUE_FALSE" | "ESSAY";
-  points: number;
+  type: "MULTIPLE_CHOICE" | "SINGLE_CHOICE";
+  points?: number;
   answers: Answer[];
 }
 
