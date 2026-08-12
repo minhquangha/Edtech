@@ -3,7 +3,8 @@ import AssignmentController from "@/controllers/assignments.js";
 const router: Router = Router();
 
 router.post("/create", AssignmentController.create);
+router.put("/edit/:id",AssignmentController.update);
+router.delete("/delete/:id",AssignmentController.deleteById);
 router.get("/:id", AssignmentController.getById);
 router.get("/", AssignmentController.getByUserId);
-console.log(2);
 export default router;

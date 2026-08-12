@@ -47,7 +47,7 @@ const UserService = {
 
     const user = result.rows[0];
 
-    // 2. Kiểm tra password (Sửa user.password_hash -> user.password)
+    // 2. Kiểm tra password 
     const isPasswordCorrect = await bcrypt.compare(
       password,
       user.password,
@@ -60,7 +60,7 @@ const UserService = {
     // 3. Tạo JWT
     const token = jwt.sign(
       {
-        userId: user.id,
+        id: user.id,
         username: user.username,
         role: user.role,
       },

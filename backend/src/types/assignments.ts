@@ -2,7 +2,7 @@ export interface Question {
   id: number;
   assignmentId: number;
   content: string;
-  type: "MULTIPLE_CHOICE" | "SINGLE_CHOICE";
+  question_type: "MULTIPLE_CHOICE" | "SINGLE_CHOICE";
   points?: number;
   answers: Answer[];
 }
@@ -38,7 +38,7 @@ export interface AssignmentRequest {
 
 export interface QuestionRequest {
   content: string;
-  type: "MULTIPLE_CHOICE" | "SINGLE_CHOICE";
+  question_type: "MULTIPLE_CHOICE" | "SINGLE_CHOICE";
   answers: AnswerRequest[];
 }
 
@@ -47,4 +47,26 @@ export interface AnswerRequest {
   isCorrect: boolean;
 }
 
+
+export interface AssignmentUpdateRequest {
+  title: string;
+  description: string;
+  class_level: string;
+  duration_minutes: number;
+  subject: string;
+  questions: QuestionUpdateRequest[];
+}
+
+export interface QuestionUpdateRequest {
+  id: number;
+  content: string;
+  question_type: "MULTIPLE_CHOICE" | "SINGLE_CHOICE";
+  answers: AnswerUpdateRequest[];
+}
+
+export interface AnswerUpdateRequest {
+  id: number;
+  content: string;
+  isCorrect: boolean;
+}
 

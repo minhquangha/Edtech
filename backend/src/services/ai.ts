@@ -1,13 +1,11 @@
 import type { AiRequest } from "@/types/ai-service.js";
-import type {  AssignmentRequest} from "@/types/assignments.js";
+import type { AssignmentRequest } from "@/types/assignments.js";
 
 import gemini from "@/config/gemini.js";
 import { assignmentAiSchema } from "@/models/ai-schema.js";
 
 const AiService = {
-  create: async (
-    demand: AiRequest
-  ): Promise<AssignmentRequest> => {
+  create: async (demand: AiRequest): Promise<AssignmentRequest> => {
     try {
       const {
         class_level,
@@ -19,11 +17,25 @@ const AiService = {
         question_config,
       } = demand.data;
 
-      const {
-        question_counts,
-        difficulty,
-        question_types,
-      } = question_config;
+      const { groups } = question_config;
+
+      // Tính tổng số câu hỏi
+      const totalQuestions = groups.reduce(
+        (total, group) => total + group.count,
+        0,
+      );
+
+      // Chuyển cấu hình groups thành nội dung cho prompt
+      const questionDistribution = groups
+        .map(
+          (group, index) => `
+Group ${index + 1}:
+- Number of questions: ${group.count}
+- Difficulty: ${group.difficulty}
+- Question type: ${group.type}
+`,
+        )
+        .join("\n");
 
       const prompt = `
 You are an AI assistant specialized in creating educational assignments.
@@ -56,63 +68,66 @@ ${time_duration} minutes
 QUESTION REQUIREMENTS
 ========================
 
-Number of questions:
-${question_counts}
+The assignment contains exactly ${totalQuestions} questions.
 
-Difficulty:
-${difficulty}
+The teacher has configured the questions into the following groups:
 
-Question type:
-${question_types}
+${questionDistribution}
 
 ========================
 GENERATION RULES
 ========================
 
-1. Generate exactly ${question_counts} questions.
+1. Generate exactly ${totalQuestions} questions.
 
-2. Every question must be related to the subject:
+2. You MUST follow the question distribution specified above.
+
+3. Every question must be related to the subject:
 "${subject}"
 
-3. Every question must focus on the topic:
+4. Every question must focus on the topic:
 "${topic}"
 
-4. Every question must be appropriate for:
+5. Every question must be appropriate for:
 "${class_level}"
 
-5. Every question must have the difficulty:
-"${difficulty}"
+6. For each group, generate exactly the specified number of questions.
 
-6. Every question must have this type:
-"${question_types}"
+7. Each question must have the exact difficulty specified by its group.
 
-7. Questions must be clear, educational, and unambiguous.
+8. Each question must have the exact question type specified by its group.
 
-8. Do not generate duplicate questions.
+9. Questions must be clear, educational, and unambiguous.
 
-9. Each question must contain multiple answer options.
+10. Do not generate duplicate questions.
 
-10. Every answer option must contain:
-   - content
-   - isCorrect
+11. Each question must contain multiple answer options.
 
-11. For SINGLE_CHOICE questions:
-   - There must be exactly ONE answer with isCorrect = true.
-   - All other answers must have isCorrect = false.
+12. Every answer option must contain:
+    - content
+    - isCorrect
 
-12. For MULTIPLE_CHOICE questions:
-   - There may be multiple correct answers.
-   - At least ONE answer must have isCorrect = true.
+13. For SINGLE_CHOICE questions:
+    - There must be exactly ONE answer with isCorrect = true.
+    - All other answers must have isCorrect = false.
 
-13. Do not include the correct answer outside the answers array.
+14. For MULTIPLE_CHOICE questions:
+    - There must be at least ONE answer with isCorrect = true.
+    - There may be multiple correct answers.
 
-14. Do not add any fields that are not defined in the required JSON schema.
+15. Do not include the difficulty field in the question output.
 
-15. Return only the assignment JSON.
+16. Do not include any field that is not defined in the required JSON schema.
 
-16. Do not return markdown.
+17. Do not include the group information in the final JSON.
 
-17. Do not return explanations before or after the JSON.
+18. Return only the assignment JSON.
+
+19. Do not return markdown.
+
+20. Do not return explanations before or after the JSON.
+
+21. Make sure the total number of generated questions is exactly ${totalQuestions}.
 
 Generate the assignment now.
 `;
@@ -124,27 +139,19 @@ Generate the assignment now.
 
         config: {
           responseMimeType: "application/json",
-
           responseSchema: assignmentAiSchema,
         },
       });
 
       if (!response.text) {
-        throw new Error(
-          "Gemini returned an empty response"
-        );
+        throw new Error("Gemini returned an empty response");
       }
 
-      const assignment: AssignmentRequest =
-        JSON.parse(response.text);
+      const assignment: AssignmentRequest = JSON.parse(response.text);
 
       return assignment;
-
     } catch (error) {
-      console.error(
-        "AI Service - generate assignment error:",
-        error
-      );
+      console.error("AI Service - generate assignment error:", error);
 
       throw error;
     }

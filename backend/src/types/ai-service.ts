@@ -1,7 +1,11 @@
 export interface QuestionConfigPayload {
-  question_counts: number;
-  difficulty: 'easy' | 'medium' | 'hard' ;
-  question_types: "MULTIPLE_CHOICE" | "SINGLE_CHOICE";
+  groups: QuestionGroupConfig[];
+}
+
+export interface QuestionGroupConfig {
+  count: number;
+  difficulty: "easy" | "medium" | "hard";
+  type: "MULTIPLE_CHOICE" | "SINGLE_CHOICE";
 }
 
 export interface LessonPayload {
@@ -16,3 +20,4 @@ export interface LessonPayload {
 export interface AiRequest{
     data: LessonPayload
 }
+
