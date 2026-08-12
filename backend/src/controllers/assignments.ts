@@ -40,6 +40,54 @@ const AssignmentController = {
       });
     }
   },
+  getById: async (req: Request, res: Response) => {
+  try {
+    const assignmentId = Number(req.params.id);
+
+    if (Number.isNaN(assignmentId)) {
+      return res.status(400).json({
+        message: "Invalid assignment id",
+      });
+    }
+
+    const assignment = await AssignmentService.getById(assignmentId);
+
+    if (!assignment) {
+      return res.status(404).json({
+        message: "Assignment not found",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Get assignment successfully",
+      data: assignment,
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+},
+  getByUserId: async(req:Request,res:Response)=>{
+    // const userId  =  req.user?.id;
+    try {
+      const userId =  3;
+      const assignment =  await AssignmentService.getByTeacherId(userId);
+      return res.status(200).json({
+        message: "Get assignments successfully",
+        data: assignment,
+      });
+    } catch (error) {
+      console.error(error);
+
+      return res.status(500).json({
+        message: "Internal server error",
+      });
+      
+    }
+  }
 };
 
 export default AssignmentController;

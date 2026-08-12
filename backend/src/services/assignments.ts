@@ -1,5 +1,10 @@
 import pool from "@/config/db.js";
-import { type Answer, type AssignmentRequest, type Question } from "@/types/assignments.js";
+import {
+  type Answer,
+  type AssignmentRequest,
+  type Question,
+  type Assignment,
+} from "@/types/assignments.js";
 
 const AssignmentService = {
   create: async (assignmentReq: AssignmentRequest, teacher_id: number) => {
@@ -35,7 +40,6 @@ const AssignmentService = {
 
       // 2. Tạo Question + AssignmentQuestion + Question_Options
       for (const question of assignmentReq.questions) {
-        // Đã sửa: Bỏ dấu phẩy thừa sau question_type
         const questionQuery = `
           INSERT INTO "Question" (
             content,
@@ -113,6 +117,108 @@ const AssignmentService = {
     } finally {
       client.release();
     }
+  },
+  getById: async (assignmentId: number): Promise<Assignment | null> => {
+    const result = await pool.query(
+      `
+    SELECT
+      a.id AS assignment_id,
+      a.title,
+      a.description,
+      a.class_level,
+      a.subject,
+      a.duration_minutes,
+      a.teacher_id,
+
+      q.id AS question_id,
+      q.content AS question_content,
+      q.question_type,
+
+      qo.id AS option_id,
+      qo.content AS option_content,
+      qo.is_correct
+
+    FROM "Assignment" a
+
+    LEFT JOIN "Assignment_Question" aq
+      ON a.id = aq.assignment_id
+
+    LEFT JOIN "Question" q
+      ON aq.question_id = q.id
+
+    LEFT JOIN "Question_Options" qo
+      ON q.id = qo.question_id
+
+    WHERE a.id = $1
+
+    ORDER BY q.id, qo.id
+    `,
+      [assignmentId],
+    );
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    const firstRow = result.rows[0];
+
+    const assignment: Assignment = {
+      id: firstRow.assignment_id,
+      title: firstRow.title,
+      description: firstRow.description,
+      class_level: firstRow.class_level,
+      subject: firstRow.subject,
+      duration_minutes: firstRow.duration_minutes,
+      teacher_id: firstRow.teacher_id,
+      questions: [],
+    };
+
+    for (const row of result.rows) {
+      let question = assignment.questions.find((q) => q.id === row.question_id);
+
+      if (!question) {
+        question = {
+          id: row.question_id,
+          assignmentId: assignment.id,
+          content: row.question_content,
+          type: row.question_type,
+          answers: [],
+        };
+
+        assignment.questions.push(question);
+      }
+
+      if (row.option_id !== null) {
+        question.answers.push({
+          id: row.option_id,
+          questionId: row.question_id,
+          content: row.option_content,
+          isCorrect: row.is_correct,
+        });
+      }
+    }
+
+    return assignment;
+  },
+  getByTeacherId: async (userId: number): Promise<Assignment[]> => {
+    const result = await pool.query(
+      `
+    SELECT
+      id,
+      title,
+      description,
+      class_level,
+      subject,
+      duration_minutes,
+      teacher_id
+    FROM "Assignment"
+    WHERE teacher_id = $1
+    ORDER BY id DESC
+    `,
+      [userId],
+    );
+
+    return result.rows;
   },
 };
 
