@@ -1,9 +1,10 @@
 import { Router } from "express";
 import userRouter from "@/routes/users.js";
-import assignmentRouter from "@/routes/assignments.js"
-const router: Router = Router();    
-
-router.use("/users",userRouter);
-console.log(1);
-router.use("/assignments",assignmentRouter)
+import assignmentRouter from "@/routes/assignments.js";
+import aiRouter from "@/routes/ai.js"
+const router: Router = Router();
+console.log(4);
+router.use("/ai",aiRouter);
+router.use("/users", userRouter);
+router.use("/assignments", assignmentRouter);
 export default router;
