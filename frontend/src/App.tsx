@@ -64,6 +64,29 @@ type DraftAssignment = {
   questions: DraftQuestion[]
 }
 
+type RawAiAnswer = {
+  id?: number
+  content: string
+  isCorrect: boolean
+}
+
+type RawAiQuestion = {
+  id?: number
+  content: string
+  type?: QuestionType
+  question_type?: QuestionType
+  answers: RawAiAnswer[]
+}
+
+type RawAiAssignment = {
+  title: string
+  description: string
+  class_level: string
+  duration_minutes: number
+  subject: string
+  questions: RawAiQuestion[]
+}
+
 type ToastState = {
   type: 'success' | 'info'
   message: string
@@ -239,23 +262,97 @@ function generateAssignmentFromAI(form: AIFormState): DraftAssignment {
   const duration = Math.max(Number(form.durationMinutes) || 15, 5)
   const difficultyLabel =
     form.difficulty === 'easy' ? 'Dễ' : form.difficulty === 'medium' ? 'Trung bình' : 'Khó'
-  const answerCount = form.questionType === 'SINGLE_CHOICE' ? 4 : 5
+  const isMath = /toán/i.test(form.subject) || /phân số|số nguyên|số học|đại số/i.test(form.topic)
+  const isScience = /khoa học|vật lý|hóa|sinh|tự nhiên/i.test(form.subject)
+
+  const mathQuestionTemplates = [
+    'Hãy tìm tử số của phân số sau: {value}',
+    'Hãy tìm mẫu số của phân số sau: {value}',
+    'Rút gọn phân số {value} về dạng tối giản.',
+    'So sánh hai phân số {valueA} và {valueB}. Phân số nào lớn hơn?',
+    'Tính giá trị của phép toán: {valueA} + {valueB}',
+  ]
+
+  const scienceQuestionTemplates = [
+    'Trong các hiện tượng sau, hiện tượng nào thuộc về {topic}?',
+    'Chọn đáp án đúng về đặc điểm của {topic}.',
+    'Yếu tố nào sau đây liên quan trực tiếp đến {topic}?',
+    'Giải thích ngắn gọn vì sao {topic} lại quan trọng trong thực tế.',
+    'Trong các lựa chọn sau, đâu là ví dụ đúng về {topic}?',
+  ]
+
+  const genericQuestionTemplates = [
+    'Chọn đáp án đúng nhất về {topic}.',
+    'Câu hỏi sau liên quan đến {topic}. Hãy chọn phương án phù hợp.',
+    'Dựa vào kiến thức về {topic}, chọn câu trả lời chính xác.',
+    'Câu nào dưới đây mô tả đúng về {topic}?',
+    'Hãy xác định đáp án đúng cho nội dung {topic}.',
+  ]
+
+  const formatMathQuestion = (index: number) => {
+    const templates = mathQuestionTemplates
+    const template = templates[index % templates.length]
+    const valueA = 6 + index
+    const valueB = 2 + index
+    const fractionNumerator = 3 + index
+    const fractionDenominator = 6 + index
+    return template
+      .replace('{value}', `${fractionNumerator}/${fractionDenominator}`)
+      .replace('{valueA}', String(valueA))
+      .replace('{valueB}', String(valueB))
+  }
+
+  const formatScienceQuestion = (index: number) => scienceQuestionTemplates[index % scienceQuestionTemplates.length]
+    .replace('{topic}', form.topic)
+
+  const formatGenericQuestion = (index: number) => genericQuestionTemplates[index % genericQuestionTemplates.length]
+    .replace('{topic}', form.topic)
+
+  const buildAnswerSet = (questionIndex: number, answerCount: number, questionType: QuestionType) => {
+    const correctNumber = 6 + questionIndex
+    const baseNumbers = [correctNumber, correctNumber + 1, correctNumber + 2, correctNumber + 3, correctNumber + 4]
+
+    return Array.from({ length: answerCount }, (_, answerIndex) => {
+      const isCorrect =
+        questionType === 'SINGLE_CHOICE'
+          ? answerIndex === 0
+          : answerIndex === 0 || (questionIndex % 2 === 0 && answerIndex === 1)
+
+      const numericValue = baseNumbers[answerIndex] ?? baseNumbers[0] + answerIndex
+      const content = isMath
+        ? `${String.fromCharCode(65 + answerIndex)}. ${numericValue}`
+        : `${String.fromCharCode(65 + answerIndex)}. ${form.topic} - phương án ${answerIndex + 1}`
+
+      return {
+        content,
+        isCorrect,
+      }
+    })
+  }
 
   const questions: DraftQuestion[] = Array.from({ length: questionCount }, (_, index) => {
     const questionId = 1000 + index + 1
-    const answers = Array.from({ length: answerCount }, (_, answerIndex) => ({
+    const answerCount = form.questionType === 'SINGLE_CHOICE' ? 4 : 5
+
+    const questionContent = isMath
+      ? formatMathQuestion(index)
+      : isScience
+        ? formatScienceQuestion(index)
+        : formatGenericQuestion(index)
+
+    const answers = buildAnswerSet(index, answerCount, form.questionType).map((answer, answerIndex) => ({
       id: questionId * 10 + answerIndex + 1,
-      content: `Phương án ${answerIndex + 1}`,
-      isCorrect: answerIndex === 0,
+      content: answer.content,
+      isCorrect: answer.isCorrect,
     }))
 
-    if (form.questionType === 'MULTIPLE_CHOICE') {
-      answers[1].isCorrect = index % 2 === 0
+    if (!answers.some((answer) => answer.isCorrect) && answers.length > 0) {
+      answers[0] = { ...answers[0], isCorrect: true }
     }
 
     return {
       id: questionId,
-      content: `(${difficultyLabel}) Câu ${index + 1}: ${form.topic} - tình huống thực hành ${index + 1}`,
+      content: `Câu ${index + 1} (${difficultyLabel}): ${questionContent}`,
       question_type: form.questionType,
       answers,
     }
@@ -269,6 +366,46 @@ function generateAssignmentFromAI(form: AIFormState): DraftAssignment {
     duration_minutes: duration,
     subject: form.subject.trim(),
     questions,
+  }
+}
+
+function normalizeAiAssignment(raw: RawAiAssignment): DraftAssignment {
+  return {
+    title: raw.title?.trim?.() ? raw.title : 'Bài tập AI',
+    description: raw.description ?? '',
+    class_level: raw.class_level ?? '',
+    duration_minutes: Number(raw.duration_minutes) || 15,
+    subject: raw.subject ?? '',
+    questions: (raw.questions ?? []).map((question, questionIndex) => {
+      const questionType = question.question_type ?? question.type ?? 'SINGLE_CHOICE'
+      const questionId = question.id ?? 2000 + questionIndex + 1
+      const answers = (question.answers ?? []).map((answer, answerIndex) => ({
+        id: answer.id ?? questionId * 10 + answerIndex + 1,
+        content: answer.content || `Phương án ${answerIndex + 1}`,
+        isCorrect: Boolean(answer.isCorrect),
+      }))
+
+      const hasCorrectAnswer = answers.some((answer) => answer.isCorrect)
+      if (!hasCorrectAnswer && answers.length > 0) {
+        answers[0] = { ...answers[0], isCorrect: true }
+      }
+
+      return {
+        id: questionId,
+        content:
+          question.content ||
+          `Câu ${questionIndex + 1}: ${raw.subject || 'Nội dung AI'} - câu hỏi được sinh tự động`,
+        question_type: questionType,
+        answers: answers.length
+          ? answers
+          : [
+              { id: questionId * 10 + 1, content: 'Phương án 1', isCorrect: true },
+              { id: questionId * 10 + 2, content: 'Phương án 2', isCorrect: false },
+              { id: questionId * 10 + 3, content: 'Phương án 3', isCorrect: false },
+              { id: questionId * 10 + 4, content: 'Phương án 4', isCorrect: false },
+            ],
+      }
+    }),
   }
 }
 
@@ -331,7 +468,7 @@ function App() {
     setAiLoading(true)
     setTimeout(() => {
       const generated = generateAssignmentFromAI(aiForm)
-      setReviewDraft(generated)
+      setReviewDraft(normalizeAiAssignment(generated))
       setAiLoading(false)
       setScreen('review')
       setToast({ type: 'info', message: 'AI đã tạo xong bản nháp để giáo viên review.' })
@@ -896,6 +1033,11 @@ function AssignmentEditor({
               <div>
                 <span className="question-index">Câu {questionIndex + 1}</span>
                 <p className="small-caption">Sửa nội dung câu hỏi, option và đáp án đúng ở đây.</p>
+                <p className="question-preview">{question.content}</p>
+                <div className="generated-preview compact">
+                  <span className="preview-label">AI question preview</span>
+                  <div className="preview-box">{question.content}</div>
+                </div>
               </div>
               <button className="link-button danger-link" type="button" onClick={() => removeQuestion(questionIndex)}>
                 Xóa câu hỏi
@@ -911,6 +1053,25 @@ function AssignmentEditor({
                 }
               />
             </Field>
+
+            <div className="generated-preview">
+              <span className="preview-label">AI preview</span>
+              <div className="preview-box">{question.content}</div>
+            </div>
+
+            <div className="generated-preview">
+              <span className="preview-label">AI options preview</span>
+              <div className="preview-chips">
+                {question.answers.map((answer, answerIndex) => (
+                  <span
+                    key={answer.id}
+                    className={answer.isCorrect ? 'preview-chip correct' : 'preview-chip'}
+                  >
+                    {String.fromCharCode(65 + answerIndex)}. {answer.content}
+                  </span>
+                ))}
+              </div>
+            </div>
 
             <div className="question-type-row">
               <Field label="Question type">
