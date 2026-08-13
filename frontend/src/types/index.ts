@@ -1,0 +1,116 @@
+export type UserRole = "STUDENT" | "TEACHER";
+
+export interface User {
+  id: number;
+  username: string;
+  role: string;
+}
+
+export interface AuthResponse {
+  accessToken: string;
+  user: User;
+}
+
+export interface RegisterResponse {
+  id: number;
+  username: string;
+  role: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Question configuration for AI generation
+export interface QuestionGroupConfig {
+  id: string; // Internal React ID for keying UI
+  count: number;
+  difficulty: "easy" | "medium" | "hard";
+  type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE";
+}
+
+export interface LessonPayload {
+  class_level: string;
+  subject: string;
+  topic: string;
+  title: string;
+  description?: string;
+  time_duration: number;
+  question_config: {
+    groups: Array<{
+      count: number;
+      difficulty: "easy" | "medium" | "hard";
+      type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE";
+    }>;
+  };
+}
+
+export interface AiRequest {
+  data: LessonPayload;
+}
+
+export interface AnswerRequest {
+  content: string;
+  isCorrect: boolean;
+}
+
+export interface QuestionRequest {
+  content: string;
+  question_type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE";
+  answers: AnswerRequest[];
+}
+
+export interface AssignmentRequest {
+  title: string;
+  description: string;
+  class_level: string;
+  duration_minutes: number;
+  subject: string;
+  questions: QuestionRequest[];
+}
+
+export interface Answer {
+  id: number;
+  questionId: number;
+  content: string;
+  isCorrect: boolean;
+}
+
+export interface Question {
+  id: number;
+  assignmentId: number;
+  content: string;
+  question_type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE";
+  answers: Answer[];
+}
+
+export interface Assignment {
+  id: number;
+  title: string;
+  description?: string;
+  class_level: string;
+  subject: string;
+  duration_minutes: number;
+  teacher_id: number;
+  questions: Question[];
+}
+
+export interface AnswerUpdateRequest {
+  id: number;
+  content: string;
+  isCorrect: boolean;
+}
+
+export interface QuestionUpdateRequest {
+  id: number;
+  content: string;
+  question_type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE";
+  answers: AnswerUpdateRequest[];
+}
+
+export interface AssignmentUpdateRequest {
+  title: string;
+  description: string;
+  class_level: string;
+  duration_minutes: number;
+  subject: string;
+  questions: QuestionUpdateRequest[];
+}
