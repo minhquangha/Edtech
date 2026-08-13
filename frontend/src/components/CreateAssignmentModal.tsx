@@ -30,11 +30,11 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
   const { token } = useAuth();
 
   // Form State
-  const [classLevel, setClassLevel] = useState("10");
-  const [subject, setSubject] = useState("Toán học");
-  const [topic, setTopic] = useState("Đại số - Hàm số bậc hai");
-  const [title, setTitle] = useState("Bài kiểm tra 15 phút - Đại số");
-  const [description, setDescription] = useState("Bài tập kiểm tra kiến thức về hàm số bậc hai");
+  const [classLevel, setClassLevel] = useState("1");
+  const [subject, setSubject] = useState("");
+  const [topic, setTopic] = useState("");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [durationMinutes, setDurationMinutes] = useState(15);
 
   // Question Config State
@@ -183,6 +183,20 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
     setStep("config");
     setGeneratedAssignment(null);
     setErrorMsg(null);
+    setSubject("");
+    setTopic("");
+    setTitle("");
+    setDescription("");
+    setClassLevel("1");
+    setDurationMinutes(15);
+    setConfigs([
+      {
+        id: "config-1",
+        count: 5,
+        difficulty: "easy",
+        type: "SINGLE_CHOICE",
+      },
+    ]);
     onClose();
   };
 
