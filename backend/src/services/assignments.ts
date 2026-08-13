@@ -443,7 +443,7 @@ const AssignmentService = {
 
         await client.query(
           `
-          DELETE FROM "QuestionOption"
+          DELETE FROM "Question_Options"
           WHERE question_id = $1
           `,
           [questionId]
@@ -455,7 +455,7 @@ const AssignmentService = {
 
         await client.query(
           `
-          DELETE FROM "AssignmentQuestion"
+          DELETE FROM "Assignment_Question"
           WHERE assignment_id = $1
             AND question_id = $2
           `,
@@ -474,7 +474,7 @@ const AssignmentService = {
           await client.query(
             `
             SELECT 1
-            FROM "AssignmentQuestion"
+            FROM "Assignment_Question"
             WHERE question_id = $1
             LIMIT 1
             `,
