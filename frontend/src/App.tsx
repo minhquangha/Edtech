@@ -1,4 +1,4 @@
-import React, { useState, Component, ErrorInfo, ReactNode } from "react";
+import React, { useState, Component, type ErrorInfo, type ReactNode } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { Navbar } from "./components/Navbar";
 import { AuthForm } from "./components/AuthForm";
