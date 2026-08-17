@@ -4,7 +4,7 @@ import {
   type AssignmentRequest,
   type Question,
   type Assignment,
-  type AssignmentUpdateRequest
+  type AssignmentUpdateRequest,
 } from "@/types/assignments.js";
 
 const AssignmentService = {
@@ -227,7 +227,7 @@ const AssignmentService = {
   updateAssignment: async (
     assignmentId: number,
     teacherId: number,
-    assignment: AssignmentUpdateRequest
+    assignment: AssignmentUpdateRequest,
   ): Promise<void> => {
     const client = await pool.connect();
 
@@ -245,13 +245,11 @@ const AssignmentService = {
         WHERE id = $1
           AND teacher_id = $2
         `,
-        [assignmentId, teacherId]
+        [assignmentId, teacherId],
       );
 
       if (assignmentResult.rows.length === 0) {
-        throw new Error(
-          "Assignment not found or you do not have permission"
-        );
+        throw new Error("Assignment not found or you do not have permission");
       }
 
       // =====================================================
@@ -276,7 +274,7 @@ const AssignmentService = {
           assignment.duration_minutes,
           assignment.subject,
           assignmentId,
-        ]
+        ],
       );
 
       // =====================================================
@@ -289,19 +287,17 @@ const AssignmentService = {
         FROM "Assignment_Question"
         WHERE assignment_id = $1
         `,
-        [assignmentId]
+        [assignmentId],
       );
 
-      const oldQuestionIds: number[] =
-        oldQuestionsResult.rows.map(
-          (row) => Number(row.question_id)
-        );
+      const oldQuestionIds: number[] = oldQuestionsResult.rows.map((row) =>
+        Number(row.question_id),
+      );
 
       // Danh sách question ID frontend gửi lên
-      const requestQuestionIds: number[] =
-        assignment.questions.map(
-          (question) => question.id
-        );
+      const requestQuestionIds: number[] = assignment.questions.map(
+        (question) => question.id,
+      );
 
       // =====================================================
       // 4. Xử lý từng Question
@@ -321,15 +317,12 @@ const AssignmentService = {
           WHERE q.id = $1
             AND aq.assignment_id = $2
           `,
-          [
-            question.id,
-            assignmentId,
-          ]
+          [question.id, assignmentId],
         );
 
         if (questionCheck.rows.length === 0) {
           throw new Error(
-            `Question ${question.id} does not belong to assignment ${assignmentId}`
+            `Question ${question.id} does not belong to assignment ${assignmentId}`,
           );
         }
 
@@ -345,11 +338,7 @@ const AssignmentService = {
             question_type = $2
           WHERE id = $3
           `,
-          [
-            question.content,
-            question.question_type,
-            question.id,
-          ]
+          [question.content, question.question_type, question.id],
         );
 
         // ===================================================
@@ -362,18 +351,16 @@ const AssignmentService = {
           FROM "Question_Options"
           WHERE question_id = $1
           `,
-          [question.id]
+          [question.id],
         );
 
-        const oldAnswerIds: number[] =
-          oldAnswersResult.rows.map(
-            (row) => Number(row.id)
-          );
+        const oldAnswerIds: number[] = oldAnswersResult.rows.map((row) =>
+          Number(row.id),
+        );
 
-        const requestAnswerIds: number[] =
-          question.answers.map(
-            (answer) => answer.id
-          );
+        const requestAnswerIds: number[] = question.answers.map(
+          (answer) => answer.id,
+        );
 
         // ===================================================
         // Update Answer
@@ -389,17 +376,12 @@ const AssignmentService = {
             WHERE id = $3
               AND question_id = $4
             `,
-            [
-              answer.content,
-              answer.isCorrect,
-              answer.id,
-              question.id,
-            ]
+            [answer.content, answer.isCorrect, answer.id, question.id],
           );
 
           if (answerResult.rowCount === 0) {
             throw new Error(
-              `Answer ${answer.id} does not belong to question ${question.id}`
+              `Answer ${answer.id} does not belong to question ${question.id}`,
             );
           }
         }
@@ -409,7 +391,7 @@ const AssignmentService = {
         // ===================================================
 
         const answersToDelete = oldAnswerIds.filter(
-          (id) => !requestAnswerIds.includes(id)
+          (id) => !requestAnswerIds.includes(id),
         );
 
         if (answersToDelete.length > 0) {
@@ -419,10 +401,7 @@ const AssignmentService = {
             WHERE id = ANY($1::int[])
               AND question_id = $2
             `,
-            [
-              answersToDelete,
-              question.id,
-            ]
+            [answersToDelete, question.id],
           );
         }
       }
@@ -431,10 +410,9 @@ const AssignmentService = {
       // 5. Xử lý Question bị giáo viên xóa
       // =====================================================
 
-      const questionsToDelete =
-        oldQuestionIds.filter(
-          (id) => !requestQuestionIds.includes(id)
-        );
+      const questionsToDelete = oldQuestionIds.filter(
+        (id) => !requestQuestionIds.includes(id),
+      );
 
       for (const questionId of questionsToDelete) {
         // -----------------------------------------------
@@ -446,7 +424,7 @@ const AssignmentService = {
           DELETE FROM "Question_Options"
           WHERE question_id = $1
           `,
-          [questionId]
+          [questionId],
         );
 
         // -----------------------------------------------
@@ -459,10 +437,7 @@ const AssignmentService = {
           WHERE assignment_id = $1
             AND question_id = $2
           `,
-          [
-            assignmentId,
-            questionId,
-          ]
+          [assignmentId, questionId],
         );
 
         // -----------------------------------------------
@@ -470,16 +445,15 @@ const AssignmentService = {
         // không
         // -----------------------------------------------
 
-        const questionUsageResult =
-          await client.query(
-            `
+        const questionUsageResult = await client.query(
+          `
             SELECT 1
             FROM "Assignment_Question"
             WHERE question_id = $1
             LIMIT 1
             `,
-            [questionId]
-          );
+          [questionId],
+        );
 
         // Nếu không còn Assignment nào sử dụng
         // thì mới xóa Question
@@ -489,7 +463,7 @@ const AssignmentService = {
             DELETE FROM "Question"
             WHERE id = $1
             `,
-            [questionId]
+            [questionId],
           );
         }
       }
@@ -499,7 +473,6 @@ const AssignmentService = {
       // =====================================================
 
       await client.query("COMMIT");
-
     } catch (error) {
       // =====================================================
       // Có lỗi -> rollback toàn bộ
@@ -507,13 +480,9 @@ const AssignmentService = {
 
       await client.query("ROLLBACK");
 
-      console.error(
-        "Update assignment error:",
-        error
-      );
+      console.error("Update assignment error:", error);
 
       throw error;
-
     } finally {
       // =====================================================
       // Trả connection về pool
@@ -524,7 +493,7 @@ const AssignmentService = {
   },
   deleteById: async (
     assignmentId: number,
-    teacherId: number
+    teacherId: number,
   ): Promise<void> => {
     const client = await pool.connect();
 
@@ -540,13 +509,11 @@ const AssignmentService = {
         WHERE id = $1
           AND teacher_id = $2
         `,
-        [assignmentId, teacherId]
+        [assignmentId, teacherId],
       );
 
       if (assignmentResult.rows.length === 0) {
-        throw new Error(
-          "Assignment not found or you do not have permission"
-        );
+        throw new Error("Assignment not found or you do not have permission");
       }
 
       // 2. Lấy các question thuộc assignment
@@ -556,13 +523,12 @@ const AssignmentService = {
         FROM "Assignment_Question"
         WHERE assignment_id = $1
         `,
-        [assignmentId]
+        [assignmentId],
       );
 
-      const questionIds: number[] =
-        questionResult.rows.map(
-          (row) => Number(row.question_id)
-        );
+      const questionIds: number[] = questionResult.rows.map((row) =>
+        Number(row.question_id),
+      );
 
       // 3. Xóa quan hệ Assignment - Question
       await client.query(
@@ -570,7 +536,7 @@ const AssignmentService = {
         DELETE FROM "Assignment_Question"
         WHERE assignment_id = $1
         `,
-        [assignmentId]
+        [assignmentId],
       );
 
       // 4. Xóa các option của question
@@ -580,7 +546,7 @@ const AssignmentService = {
           DELETE FROM "Question_Options"
           WHERE question_id = ANY($1::int[])
           `,
-          [questionIds]
+          [questionIds],
         );
 
         // 5. Xóa question
@@ -589,7 +555,7 @@ const AssignmentService = {
           DELETE FROM "Question"
           WHERE id = ANY($1::int[])
           `,
-          [questionIds]
+          [questionIds],
         );
       }
 
@@ -600,26 +566,75 @@ const AssignmentService = {
         WHERE id = $1
           AND teacher_id = $2
         `,
-        [assignmentId, teacherId]
+        [assignmentId, teacherId],
       );
 
       // 7. Thành công
       await client.query("COMMIT");
-
     } catch (error) {
       await client.query("ROLLBACK");
 
-      console.error(
-        "Delete assignment error:",
-        error
-      );
+      console.error("Delete assignment error:", error);
 
       throw error;
-
     } finally {
       client.release();
     }
   },
+  getGrades: async (): Promise<any[]> => {
+    return [];
+  },
+  getSubject: async (gradeId: number): Promise<any[]> => {
+    const result = await pool.query(
+      `
+        SELECT DISTINCT
+            s.id,
+            s.subject
+        FROM "Subjects" s
+        JOIN "Lessons" l
+            ON l.subject_id = s.id
+        WHERE l.grade_id = $1
+        ORDER BY s.subject ASC
+        `,
+      [gradeId],
+    );
+
+    return result.rows;
+  },
+  getLessons: async (gradeId: number, subjectId: number): Promise<any[]> => {
+    const result = await pool.query(
+      `
+        SELECT
+            id,
+            lesson_number,
+            title
+        FROM "Lessons"
+        WHERE grade_id = $1
+          AND subject_id = $2
+        ORDER BY lesson_number ASC
+        `,
+      [gradeId, subjectId],
+    );
+
+    return result.rows;
+  },
+  getLessonsContent: async (lessonIds: number[]): Promise<any[]> => {
+      const result = await pool.query(
+        `
+        SELECT
+            id,
+            lesson_number,
+            title,
+            content
+        FROM "Lessons"
+        WHERE id = ANY($1::int[])
+        ORDER BY lesson_number ASC
+        `,
+        [lessonIds]
+    );
+
+    return result.rows;
+  }
 };
 
 export default AssignmentService;

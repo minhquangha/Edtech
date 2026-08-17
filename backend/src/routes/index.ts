@@ -8,4 +8,5 @@ console.log(4);
 router.use("/ai",aiRouter);
 router.use("/users", userRouter);
 router.use("/assignments",authenticate, assignmentRouter);
+// router.use("/assignments", assignmentRouter);
 export default router;

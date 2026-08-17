@@ -151,6 +151,70 @@ const AssignmentController = {
       });
     }
   },
+
+  getGrades: async (req: Request, res: Response) => {
+    try {
+      const grades = await AssignmentService.getGrades();
+
+      return res.status(200).json({
+        message: "Get grades successfully",
+        data: grades,
+      });
+    } catch (error) {
+      console.error(error);
+    }
+  },
+  getLessons: async (req: Request, res: Response) => {
+    try {
+        const gradeId = Number(req.query.gradeId);
+        const subjectId = Number(req.query.subjectId);
+
+        if (
+            !gradeId ||
+            Number.isNaN(gradeId) ||
+            !subjectId ||
+            Number.isNaN(subjectId)
+        ) {
+            return res.status(400).json({
+                message: "gradeId and subjectId are required"
+            });
+        }
+
+        const lessons = await AssignmentService.getLessons(
+            gradeId,
+            subjectId
+        );
+
+        return res.status(200).json(lessons);
+    } catch (error) {
+        console.error(error);
+
+        return res.status(500).json({
+            message: "Failed to get lessons"
+        });
+    }
+  },
+  getSubjects: async (req: Request, res: Response) => {
+    try {
+      const gradeId = Number(req.query.gradeId); 
+
+      if (!gradeId || Number.isNaN(gradeId)) {
+        return res.status(400).json({
+          message: "gradeId is required",
+        });
+      }
+
+      const subjects = await AssignmentService.getSubject(gradeId);
+
+      return res.status(200).json(subjects);
+    }catch(error){
+        console.error(error);
+        return res.status(500).json({
+            message: "Failed to get subjects"
+        });
+    }
+  }
+
 };
 
 export default AssignmentController;
