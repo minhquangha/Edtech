@@ -19,10 +19,22 @@ export interface RegisterResponse {
   updated_at: string;
 }
 
+export interface Subject {
+  id: number;
+  subject: string;
+}
+
+export interface Lesson {
+  id: number;
+  lesson_number: number;
+  title: string;
+}
+
 // Question configuration for AI generation
 export interface QuestionGroupConfig {
   id: string; // Internal React ID for keying UI
   count: number;
+  lessonIds: number[];
   difficulty: "easy" | "medium" | "hard";
   type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE";
 }
@@ -30,13 +42,13 @@ export interface QuestionGroupConfig {
 export interface LessonPayload {
   class_level: string;
   subject: string;
-  topic: string;
   title: string;
   description?: string;
   time_duration: number;
   question_config: {
     groups: Array<{
       count: number;
+      lessonIds: number[];
       difficulty: "easy" | "medium" | "hard";
       type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE";
     }>;

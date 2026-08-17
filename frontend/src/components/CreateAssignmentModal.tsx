@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from "react";
-import type { QuestionGroupConfig, AssignmentRequest } from "../types";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
+import type { QuestionGroupConfig, AssignmentRequest, Subject, Lesson, AiRequest } from "../types";
 import { QuestionConfigBlock } from "./QuestionConfigBlock";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
@@ -30,18 +30,26 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
   const { token } = useAuth();
 
   // Form State
-  const [classLevel, setClassLevel] = useState("1");
-  const [subject, setSubject] = useState("");
-  const [topic, setTopic] = useState("");
+  const [classLevel, setClassLevel] = useState("12");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [durationMinutes, setDurationMinutes] = useState(15);
+
+  // Subjects & Lessons API State
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [selectedSubjectId, setSelectedSubjectId] = useState<number | null>(null);
+  const [selectedSubjectCode, setSelectedSubjectCode] = useState<string>("");
+  const [isLoadingSubjects, setIsLoadingSubjects] = useState(false);
+
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [isLoadingLessons, setIsLoadingLessons] = useState(false);
 
   // Question Config State
   const [configs, setConfigs] = useState<QuestionGroupConfig[]>([
     {
       id: "config-1",
       count: 5,
+      lessonIds: [],
       difficulty: "easy",
       type: "SINGLE_CHOICE",
     },
@@ -56,6 +64,73 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
   // Generated Assignment for Review & Edit
   const [generatedAssignment, setGeneratedAssignment] = useState<AssignmentRequest | null>(null);
 
+  // Fetch subjects for grade
+  const fetchSubjects = useCallback(async (gradeId: string) => {
+    setIsLoadingSubjects(true);
+    try {
+      const data = await api.getSubjects(gradeId, token);
+      setSubjects(data);
+    } catch (err: any) {
+      console.error("Lỗi khi lấy danh sách môn học:", err);
+      setSubjects([]);
+    } finally {
+      setIsLoadingSubjects(false);
+    }
+  }, [token]);
+
+  // Fetch lessons for grade & subject
+  const fetchLessons = useCallback(async (gradeId: string, subjectId: number) => {
+    setIsLoadingLessons(true);
+    try {
+      const data = await api.getLessons(gradeId, subjectId, token);
+      setLessons(data);
+    } catch (err: any) {
+      console.error("Lỗi khi lấy danh sách bài học:", err);
+      setLessons([]);
+    } finally {
+      setIsLoadingLessons(false);
+    }
+  }, [token]);
+
+  // Initial load of subjects when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchSubjects(classLevel);
+    }
+  }, [isOpen, classLevel, fetchSubjects]);
+
+  // Handle Grade Change
+  const handleGradeChange = (newGrade: string) => {
+    setClassLevel(newGrade);
+    setSelectedSubjectId(null);
+    setSelectedSubjectCode("");
+    setSubjects([]);
+    setLessons([]);
+    setConfigs((prev) => prev.map((c) => ({ ...c, lessonIds: [] })));
+    fetchSubjects(newGrade);
+  };
+
+  // Handle Subject Change
+  const handleSubjectChange = (subjectIdStr: string) => {
+    if (!subjectIdStr) {
+      setSelectedSubjectId(null);
+      setSelectedSubjectCode("");
+      setLessons([]);
+      setConfigs((prev) => prev.map((c) => ({ ...c, lessonIds: [] })));
+      return;
+    }
+
+    const subId = Number(subjectIdStr);
+    const foundSub = subjects.find((s) => s.id === subId);
+    if (foundSub) {
+      setSelectedSubjectId(foundSub.id);
+      setSelectedSubjectCode(foundSub.subject);
+      setLessons([]);
+      setConfigs((prev) => prev.map((c) => ({ ...c, lessonIds: [] })));
+      fetchLessons(classLevel, foundSub.id);
+    }
+  };
+
   // Auto-calculated Total Questions Count
   const totalQuestions = useMemo(() => {
     return configs.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
@@ -67,6 +142,7 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
     const newConfig: QuestionGroupConfig = {
       id: `config-${Date.now()}`,
       count: 5,
+      lessonIds: [],
       difficulty: "medium",
       type: "SINGLE_CHOICE",
     };
@@ -84,23 +160,48 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
     setConfigs(configs.filter((_, i) => i !== index));
   };
 
-  // Step 1: Call AI API to generate assignment (Data returned to frontend, NOT saved to DB yet)
+  // Step 1: Call AI API to generate assignment
   const handleGenerateAi = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
-    if (!subject.trim()) {
-      setErrorMsg("Vui lòng nhập môn học");
+    if (!classLevel) {
+      setErrorMsg("Vui lòng chọn lớp học");
       return;
     }
-    if (!topic.trim()) {
-      setErrorMsg("Vui lòng nhập bài học / chủ đề");
+    if (!selectedSubjectCode || selectedSubjectId === null) {
+      setErrorMsg("Vui lòng chọn môn học");
       return;
     }
     if (!title.trim()) {
       setErrorMsg("Vui lòng nhập tên bài tập");
       return;
     }
+    if (configs.length === 0) {
+      setErrorMsg("Vui lòng thêm ít nhất một nhóm câu hỏi");
+      return;
+    }
+
+    for (let i = 0; i < configs.length; i++) {
+      const conf = configs[i];
+      if (!conf.count || conf.count <= 0) {
+        setErrorMsg(`Nhóm câu hỏi #${i + 1} phải có số lượng câu hỏi lớn hơn 0`);
+        return;
+      }
+      if (!conf.lessonIds || conf.lessonIds.length === 0) {
+        setErrorMsg(`Nhóm câu hỏi #${i + 1} chưa chọn bài học nào`);
+        return;
+      }
+      if (!conf.difficulty) {
+        setErrorMsg(`Nhóm câu hỏi #${i + 1} chưa chọn độ khó`);
+        return;
+      }
+      if (!conf.type) {
+        setErrorMsg(`Nhóm câu hỏi #${i + 1} chưa chọn loại câu hỏi`);
+        return;
+      }
+    }
+
     if (totalQuestions <= 0) {
       setErrorMsg("Tổng số câu hỏi phải lớn hơn 0");
       return;
@@ -109,17 +210,17 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
     setIsAiGenerating(true);
 
     try {
-      const payload = {
+      const payload: AiRequest = {
         data: {
           class_level: classLevel,
-          subject: subject.trim(),
-          topic: topic.trim(),
+          subject: selectedSubjectCode,
           title: title.trim(),
           description: description.trim(),
           time_duration: durationMinutes,
           question_config: {
             groups: configs.map((c) => ({
-              count: c.count,
+              count: Number(c.count),
+              lessonIds: c.lessonIds,
               difficulty: c.difficulty,
               type: c.type,
             })),
@@ -183,16 +284,19 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
     setStep("config");
     setGeneratedAssignment(null);
     setErrorMsg(null);
-    setSubject("");
-    setTopic("");
+    setSelectedSubjectId(null);
+    setSelectedSubjectCode("");
+    setSubjects([]);
+    setLessons([]);
     setTitle("");
     setDescription("");
-    setClassLevel("1");
+    setClassLevel("12");
     setDurationMinutes(15);
     setConfigs([
       {
         id: "config-1",
         count: 5,
+        lessonIds: [],
         difficulty: "easy",
         type: "SINGLE_CHOICE",
       },
@@ -263,7 +367,7 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
           <div className="alert-error margin-horizontal">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12" />
               <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
             <span>{errorMsg}</span>
@@ -274,14 +378,14 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
         {step === "config" && (
           <form onSubmit={handleGenerateAi} className="modal-body">
             <div className="form-grid-2">
-              {/* Lớp dropdown (Đúng Lớp 1 -> Lớp 12) */}
+              {/* Lớp dropdown (1 -> 12) */}
               <div className="form-group">
                 <label htmlFor="classLevel">Lớp học</label>
                 <select
                   id="classLevel"
                   className="custom-select"
                   value={classLevel}
-                  onChange={(e) => setClassLevel(e.target.value)}
+                  onChange={(e) => handleGradeChange(e.target.value)}
                 >
                   {CLASS_OPTIONS.map((cls) => (
                     <option key={cls.value} value={cls.value}>
@@ -291,29 +395,42 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
                 </select>
               </div>
 
-              {/* Môn học (Free text) */}
+              {/* Môn học dropdown từ API */}
               <div className="form-group">
                 <label htmlFor="subject">Môn học</label>
-                <input
+                <select
                   id="subject"
-                  type="text"
-                  placeholder="Ví dụ: Toán học, Vật lý, Tiếng Anh..."
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                />
+                  className="custom-select"
+                  value={selectedSubjectId !== null ? selectedSubjectId : ""}
+                  onChange={(e) => handleSubjectChange(e.target.value)}
+                  disabled={isLoadingSubjects}
+                >
+                  <option value="">
+                    {isLoadingSubjects
+                      ? "-- Đang tải danh sách môn... --"
+                      : subjects.length === 0
+                      ? "-- Không tìm thấy môn học --"
+                      : "-- Chọn môn học --"}
+                  </option>
+                  {subjects.map((sub) => (
+                    <option key={sub.id} value={sub.id}>
+                      {sub.subject}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
             <div className="form-grid-2">
-              {/* Bài học / Topic (Free text) */}
+              {/* Tên bài tập */}
               <div className="form-group">
-                <label htmlFor="topic">Bài học / Chủ đề</label>
+                <label htmlFor="title">Tên bài tập / Đề thi</label>
                 <input
-                  id="topic"
+                  id="title"
                   type="text"
-                  placeholder="Ví dụ: Hàm số bậc hai, Câu điều kiện..."
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
+                  placeholder="Nhập tên tiêu đề bài tập..."
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
                 />
               </div>
 
@@ -332,17 +449,6 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
             </div>
 
             <div className="form-group">
-              <label htmlFor="title">Tên bài tập / Đề thi</label>
-              <input
-                id="title"
-                type="text"
-                placeholder="Nhập tên tiêu đề bài tập..."
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </div>
-
-            <div className="form-group">
               <label htmlFor="description">Ghi chú / Mô tả (Không bắt buộc)</label>
               <textarea
                 id="description"
@@ -358,7 +464,7 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
               <div className="config-section-header">
                 <div>
                   <h4>Cấu Hình Cấu Trúc Câu Hỏi</h4>
-                  <span className="config-hint">Thêm các nhóm câu hỏi theo số lượng, độ khó và định dạng</span>
+                  <span className="config-hint">Thêm các nhóm câu hỏi theo số lượng, bài học, độ khó và định dạng</span>
                 </div>
                 {/* Total count badge automatically calculated */}
                 <div className="total-badge">
@@ -374,6 +480,8 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
                     config={conf}
                     index={index}
                     canDelete={configs.length > 1}
+                    availableLessons={lessons}
+                    isLoadingLessons={isLoadingLessons}
                     onUpdate={(updated) => handleUpdateConfig(index, updated)}
                     onDelete={() => handleDeleteConfig(index)}
                   />
@@ -389,7 +497,7 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
                   <line x1="12" y1="5" x2="12" y2="19"></line>
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
-                <span>+ Thêm cấu hình câu hỏi</span>
+                <span>+ Thêm nhóm</span>
               </button>
             </div>
 

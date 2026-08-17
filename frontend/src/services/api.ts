@@ -4,6 +4,8 @@ import type {
   AiRequest,
   AssignmentRequest,
   Assignment,
+  Subject,
+  Lesson,
 } from "../types";
 
 // const API_BASE_URL = "/api";
@@ -29,6 +31,41 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 export const api = {
+  // Subjects & Lessons APIs
+  getSubjects: async (gradeId: string | number, token?: string | null): Promise<Subject[]> => {
+    let res = await fetch(`${API_BASE_URL}/assignments/subjects?gradeId=${gradeId}`, {
+      method: "GET",
+      headers: getHeaders(token),
+    });
+    if (!res.ok) {
+      res = await fetch(`${API_BASE_URL}/assignment/subjects?gradeId=${gradeId}`, {
+        method: "GET",
+        headers: getHeaders(token),
+      });
+    }
+    const data = await handleResponse<any>(res);
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.data)) return data.data;
+    return [];
+  },
+
+  getLessons: async (gradeId: string | number, subjectId: number, token?: string | null): Promise<Lesson[]> => {
+    let res = await fetch(`${API_BASE_URL}/assignments/lessons?gradeId=${gradeId}&subjectId=${subjectId}`, {
+      method: "GET",
+      headers: getHeaders(token),
+    });
+    if (!res.ok) {
+      res = await fetch(`${API_BASE_URL}/assignment/lessons?gradeId=${gradeId}&subjectId=${subjectId}`, {
+        method: "GET",
+        headers: getHeaders(token),
+      });
+    }
+    const data = await handleResponse<any>(res);
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.data)) return data.data;
+    return [];
+  },
+
   // Auth APIs
   login: async (username: string, password: string): Promise<AuthResponse> => {
     const res = await fetch(`${API_BASE_URL}/users/me/login`, {
