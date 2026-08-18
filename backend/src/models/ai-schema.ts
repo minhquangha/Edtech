@@ -38,7 +38,13 @@ export const assignmentAiSchema = {
             enum: [
               "MULTIPLE_CHOICE",
               "SINGLE_CHOICE",
+              "TRUE_FALSE",
+              "SHORT_ANSWER",
             ],
+          },
+
+          answer: {
+            type: "string",
           },
 
           answers: {
@@ -68,6 +74,7 @@ export const assignmentAiSchema = {
         required: [
           "content",
           "type",
+          "answer",
           "answers",
         ],
       },

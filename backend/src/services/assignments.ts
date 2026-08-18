@@ -22,39 +22,44 @@ const AssignmentService = {
         INSERT INTO "Assignment" (
           title,
           description,
-          class_level,
-          subject,
           duration_minutes,
           teacher_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6)
+        VALUES ($1, $2, $3, $4)
         RETURNING id;
       `;
       const assignmentResult = await client.query(assignmentQuery, [
         assignmentReq.title,
         assignmentReq.description,
-        assignmentReq.class_level,
-        assignmentReq.subject,
         assignmentReq.duration_minutes,
-        teacher_id,
+        teacher_id
       ]);
 
       const assignmentId = assignmentResult.rows[0].id;
-      const questions: Question[] = [];
 
+      // Cần tạo Assignment_lesson => cần lessonId và assigment id
+
+      const lessonQuery = `
+        INSERT INTO "Lesson_Assignment" (assignment_id, lesson_id)
+        SELECT $1, unnest($2::int[]);
+      `;
+      await client.query(lessonQuery, [assignmentId, assignmentReq.lessonIds]);
+      const questions: Question[] = [];
       // 2. Tạo Question + AssignmentQuestion + Question_Options
       for (const question of assignmentReq.questions) {
         const questionQuery = `
           INSERT INTO "Question" (
             content,
-            question_type
+            question_type,
+            answer
           )
-          VALUES ($1, $2)
+          VALUES ($1, $2, $3)
           RETURNING id;
         `;
         const questionResult = await client.query(questionQuery, [
           question.content,
           question.question_type,
+          question.answer || null,
         ]);
         const questionId = questionResult.rows[0].id;
 
@@ -70,8 +75,13 @@ const AssignmentService = {
 
         // 4. Tạo đáp án
         const answers: Answer[] = [];
-        for (const ans of question.answers) {
-          const optionQuery = `
+        if (
+          question.question_type === "SINGLE_CHOICE" ||
+          question.question_type === "MULTIPLE_CHOICE"||
+          question.question_type === "TRUE_FALSE"
+        ) {
+          for (const ans of question.answers) {
+            const optionQuery = `
             INSERT INTO "Question_Options" (
               question_id,
               content,
@@ -80,27 +90,28 @@ const AssignmentService = {
             VALUES ($1, $2, $3)
             RETURNING id;
           `;
-          const answerResult = await client.query(optionQuery, [
-            questionId,
-            ans.content,
-            ans.isCorrect,
-          ]);
+            const answerResult = await client.query(optionQuery, [
+              questionId,
+              ans.content,
+              ans.isCorrect,
+            ]);
 
-          answers.push({
-            id: answerResult.rows[0].id,
-            questionId: questionId,
-            content: ans.content,
-            isCorrect: ans.isCorrect,
+            answers.push({
+              id: answerResult.rows[0].id,
+              questionId: questionId,
+              content: ans.content,
+              isCorrect: ans.isCorrect,
+            });
+          }
+
+          questions.push({
+            id: questionId,
+            assignmentId: assignmentId,
+            content: question.content,
+            question_type: question.question_type,
+            answers: answers,
           });
         }
-
-        questions.push({
-          id: questionId,
-          assignmentId: assignmentId,
-          content: question.content,
-          question_type: question.question_type,
-          answers: answers,
-        });
       }
 
       await client.query("COMMIT");
@@ -123,26 +134,43 @@ const AssignmentService = {
     }
   },
   getById: async (assignmentId: number): Promise<Assignment | null> => {
-    const result = await pool.query(
-      `
+  const result = await pool.query(
+    `
     SELECT
       a.id AS assignment_id,
       a.title,
       a.description,
-      a.class_level,
-      a.subject,
       a.duration_minutes,
       a.teacher_id,
+
+      s.id AS subject_id,
+      s.subject AS subject,
+
+      g.id AS grade_id,
+      g.grade AS class_level,
 
       q.id AS question_id,
       q.content AS question_content,
       q.question_type,
+      q.answer AS question_answer,
 
       qo.id AS option_id,
       qo.content AS option_content,
       qo.is_correct
 
     FROM "Assignment" a
+
+    LEFT JOIN "Lesson_Assignment" la
+      ON a.id = la.assignment_id
+
+    LEFT JOIN "Lessons" l
+      ON la.lesson_id = l.id
+
+    LEFT JOIN "Subjects" s
+      ON l.subject_id = s.id
+
+    LEFT JOIN "Grades" g
+      ON l.grade_id = g.id
 
     LEFT JOIN "Assignment_Question" aq
       ON a.id = aq.assignment_id
@@ -157,73 +185,88 @@ const AssignmentService = {
 
     ORDER BY q.id, qo.id
     `,
-      [assignmentId],
+    [assignmentId],
+  );
+
+  if (result.rows.length === 0) {
+    return null;
+  }
+
+  const firstRow = result.rows[0];
+
+  const assignment: Assignment = {
+    id: firstRow.assignment_id,
+    title: firstRow.title,
+    description: firstRow.description,
+    duration_minutes: firstRow.duration_minutes,
+    teacher_id: firstRow.teacher_id,
+
+    subject: firstRow.subject,
+    class_level: firstRow.class_level,
+
+    questions: [],
+  };
+
+  for (const row of result.rows) {
+    let question = assignment.questions.find(
+      (q) => q.id === row.question_id,
     );
 
-    if (result.rows.length === 0) {
-      return null;
+    if (!question) {
+      question = {
+        id: row.question_id,
+        assignmentId: assignment.id,
+        content: row.question_content,
+        question_type: row.question_type,
+        answer: row.question_answer,
+        answers: [],
+      };
+
+      assignment.questions.push(question);
     }
 
-    const firstRow = result.rows[0];
-
-    const assignment: Assignment = {
-      id: firstRow.assignment_id,
-      title: firstRow.title,
-      description: firstRow.description,
-      class_level: firstRow.class_level,
-      subject: firstRow.subject,
-      duration_minutes: firstRow.duration_minutes,
-      teacher_id: firstRow.teacher_id,
-      questions: [],
-    };
-
-    for (const row of result.rows) {
-      let question = assignment.questions.find((q) => q.id === row.question_id);
-
-      if (!question) {
-        question = {
-          id: row.question_id,
-          assignmentId: assignment.id,
-          content: row.question_content,
-          question_type: row.question_type,
-          answers: [],
-        };
-
-        assignment.questions.push(question);
-      }
-
-      if (row.option_id !== null) {
-        question.answers.push({
-          id: row.option_id,
-          questionId: row.question_id,
-          content: row.option_content,
-          isCorrect: row.is_correct,
-        });
-      }
+    if (row.option_id !== null) {
+      question.answers.push({
+        id: row.option_id,
+        questionId: row.question_id,
+        content: row.option_content,
+        isCorrect: row.is_correct,
+      });
     }
+  }
 
-    return assignment;
-  },
+  return assignment;
+},
   getByTeacherId: async (userId: number): Promise<Assignment[]> => {
-    const result = await pool.query(
-      `
-    SELECT
-      id,
-      title,
-      description,
-      class_level,
-      subject,
-      duration_minutes,
-      teacher_id
-    FROM "Assignment"
-    WHERE teacher_id = $1
-    ORDER BY id DESC
+  const result = await pool.query(
+    `
+    SELECT DISTINCT ON (a.id)
+      a.id,
+      a.title,
+      a.description,
+      a.duration_minutes,
+      a.teacher_id,
+      s.id AS subject_id,
+      s.subject AS subject,
+      g.id AS grade_id,
+      g.grade AS class_level
+    FROM "Assignment" a
+    LEFT JOIN "Lesson_Assignment" la
+      ON la.assignment_id = a.id
+    LEFT JOIN "Lessons" l
+      ON l.id = la.lesson_id
+    LEFT JOIN "Subjects" s
+      ON s.id = l.subject_id
+    LEFT JOIN "Grades" g
+      ON g.id = l.grade_id
+    WHERE a.teacher_id = $1
+    ORDER BY a.id DESC
     `,
-      [userId],
-    );
+    [userId],
+  );
 
-    return result.rows;
-  },
+  return result.rows;
+},
   updateAssignment: async (
     assignmentId: number,
     teacherId: number,
@@ -619,8 +662,8 @@ const AssignmentService = {
     return result.rows;
   },
   getLessonsContent: async (lessonIds: number[]): Promise<any[]> => {
-      const result = await pool.query(
-        `
+    const result = await pool.query(
+      `
         SELECT
             id,
             lesson_number,
@@ -630,11 +673,11 @@ const AssignmentService = {
         WHERE id = ANY($1::int[])
         ORDER BY lesson_number ASC
         `,
-        [lessonIds]
+      [lessonIds],
     );
 
     return result.rows;
-  }
+  },
 };
 
 export default AssignmentService;

@@ -6,7 +6,7 @@ export interface QuestionGroupConfig {
   topic:string;
   count: number;
   difficulty: "easy" | "medium" | "hard";
-  type: "MULTIPLE_CHOICE" | "SINGLE_CHOICE";
+  type: "MULTIPLE_CHOICE"|"SINGLE_CHOICE"|"TRUE_FALSE"|"SHORT_ANSWER";
   lessonIds: number[];
 }
 

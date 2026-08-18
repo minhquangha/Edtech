@@ -22,6 +22,7 @@ const AssignmentController = {
       //   });
       // }
       if (!req.user) {
+        // 
         return res.status(401).json({ message: "Unauthorized" });
       }
       const teacherId = req.user.id;

@@ -204,33 +204,113 @@ provided inside that group.
 
 11. Do not generate duplicate questions.
 
-12. Each question must contain multiple answer options.
+12. The structure of the answer data MUST depend on the question type.
 
-13. Every answer option must contain:
-    - content
-    - isCorrect
+13. For SINGLE_CHOICE questions:
 
-14. For SINGLE_CHOICE questions:
-    - There must be exactly ONE answer with isCorrect = true.
-    - All other answers must have isCorrect = false.
+    - "question_type" MUST be "SINGLE_CHOICE".
+    - "answers" MUST contain at least 2 options.
+    - Each answer option MUST contain:
+        - content
+        - isCorrect
+    - There MUST be exactly ONE answer with isCorrect = true.
+    - All other answers MUST have isCorrect = false.
+    - "answer" MUST be null.
 
-15. For MULTIPLE_CHOICE questions:
-    - There must be at least ONE answer with isCorrect = true.
-    - There may be multiple correct answers.
+14. For MULTIPLE_CHOICE questions:
 
-16. Do not include the difficulty field in the question output.
+    - "question_type" MUST be "MULTIPLE_CHOICE".
+    - "answers" MUST contain at least 2 options.
+    - Each answer option MUST contain:
+        - content
+        - isCorrect
+    - There MUST be at least ONE answer with isCorrect = true.
+    - There MAY be multiple answers with isCorrect = true.
+    - "answer" MUST be null.
 
-17. Do not include any field that is not defined in the required JSON schema.
+15. For TRUE_FALSE questions:
 
-18. Do not include group information in the final JSON.
+    - "question_type" MUST be "TRUE_FALSE".
+    - "answers" MUST be an empty array [].
+    - DO NOT create answer options for TRUE_FALSE questions.
+    - "answer" MUST be either the string "true" or the string "false".
+    - The answer MUST represent the correct answer to the statement.
+    - The statement must be clear and objectively determined from the provided lesson content.
 
-19. Return only the assignment JSON.
+    Example:
 
-20. Do not return markdown.
+    {
+      "content": "The Earth revolves around the Sun.",
+      "question_type": "TRUE_FALSE",
+      "answer": "true",
+      "answers": []
+    }
 
-21. Do not return explanations before or after the JSON.
+16. For SHORT_ANSWER questions:
 
-22. Make sure the total number of generated questions is exactly ${totalQuestions}.
+    - "question_type" MUST be "SHORT_ANSWER".
+    - "answers" MUST be an empty array [].
+    - DO NOT create answer options for SHORT_ANSWER questions.
+    - "answer" MUST be a non-empty string.
+    - The answer must be short, clear, and directly supported by the provided lesson content.
+    - Do not provide multiple possible answers unless the question explicitly requires them.
+
+    Example:
+
+    {
+      "content": "What is the capital of Vietnam?",
+      "question_type": "SHORT_ANSWER",
+      "answer": "Hanoi",
+      "answers": []
+    }
+
+17. The following rules MUST always apply:
+
+    SINGLE_CHOICE:
+        answer = null
+        answers = array of options
+
+    MULTIPLE_CHOICE:
+        answer = null
+        answers = array of options
+
+    TRUE_FALSE:
+        answer = "true" or "false"
+        answers = []
+
+    SHORT_ANSWER:
+        answer = string
+        answers = []
+
+18. Do NOT create Question Options for TRUE_FALSE or SHORT_ANSWER.
+
+19. Do NOT put TRUE_FALSE answers such as "True" and "False" inside the "answers" array.
+
+20. Do NOT put SHORT_ANSWER answers inside the "answers" array.
+
+21. Do not include the difficulty field in the question output.
+
+22. Do not include any field that is not defined in the required JSON schema.
+
+23. Do not include group information in the final JSON.
+
+24. Return only the assignment JSON.
+
+25. Do not return markdown.
+
+26. Do not return explanations before or after the JSON.
+
+27. Make sure the total number of generated questions is exactly ${totalQuestions}.
+
+28. Before returning the final JSON, internally verify:
+
+    - The number of questions is exactly ${totalQuestions}.
+    - Every question has the correct question_type.
+    - SINGLE_CHOICE has exactly one correct option.
+    - MULTIPLE_CHOICE has at least one correct option.
+    - TRUE_FALSE has answer = "true" or "false" and answers = [].
+    - SHORT_ANSWER has a non-empty answer and answers = [].
+    - No question type contains an invalid answer structure.
 
 Generate the assignment now.
 `;
