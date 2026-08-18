@@ -72,7 +72,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem(USER_KEY);
   };
 
-  return (
+  return (// trả về những chỗ gọi đến AuthProvider với những component con của AuthProvider 
+         // sẽ dc ném vào phần children ở trong lệnh trả về này.
     <AuthContext.Provider
       value={{
         user,
@@ -82,7 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         register,
         logout,
-      }}
+      }}// chuyền dữ liệu vào context hiện tại(tức AuthContext) 
     >
       {children}
     </AuthContext.Provider>
@@ -90,7 +91,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 };
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
+  const context = useContext(AuthContext);//kiểm tra component hiện tại có nằm trong AuthContext.Provider ko
+  // nếu ko thì báo lỗi còn nếu có thì trả về dữ liệu của context hiện tại.
   if (!context) {
     throw new Error("useAuth must be used within an AuthProvider");
   }

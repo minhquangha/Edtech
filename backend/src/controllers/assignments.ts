@@ -7,7 +7,7 @@ import {
 import AssignmentService from "@/services/assignments.js";
 
 const AssignmentController = {
-  create: async (req: Request, res: Response) => {
+  create: async (req: Request, res: Response) => {// tạo bài tập(phải có quyền teacher)
     console.log(3);
     try {
       // Dữ liệu frontend gửi lên
@@ -44,7 +44,7 @@ const AssignmentController = {
       });
     }
   },
-  getById: async (req: Request, res: Response) => {
+  getById: async (req: Request, res: Response) => {// lấy ra bài tập theo id
     try {
       const assignmentId = Number(req.params.id);
 
@@ -74,7 +74,7 @@ const AssignmentController = {
       });
     }
   },
-  getByUserId: async (req: Request, res: Response) => {
+  getByUserId: async (req: Request, res: Response) => { //lấy ra bài tập đã tạo(phải có quyền teacher)
     // const userId  =  req.user?.id;
     try {
       if (!req.user) {
@@ -94,7 +94,7 @@ const AssignmentController = {
       });
     }
   },
-  update: async (req: Request, res: Response) => {
+  update: async (req: Request, res: Response) => { // Cập nhật bài tập dc AI tạo
     try {
       const assignmentId = Number(req.params.id);
       if (!req.user) {
@@ -121,7 +121,7 @@ const AssignmentController = {
       });
     }
   },
-  deleteById: async (req: Request, res: Response) => {
+  deleteById: async (req: Request, res: Response) => {// xóa bài tập
     try {
       const assignmentId = Number(req.params.id);
 

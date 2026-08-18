@@ -254,9 +254,11 @@ Generate the assignment now.
         throw new Error("Gemini returned an empty response");
       }
 
+
       const assignment: AssignmentRequest = JSON.parse(
         response.text
       );
+
 
       return assignment;
     } catch (error) {

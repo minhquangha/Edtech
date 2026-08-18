@@ -4,6 +4,8 @@ import { Navbar } from "./components/Navbar";
 import { AuthForm } from "./components/AuthForm";
 import { AssignmentList } from "./components/AssignmentList";
 import { CreateAssignmentModal } from "./components/CreateAssignmentModal";
+import { ImportPdfModal } from "./components/ImportPdfModal";
+import type { AssignmentRequest } from "./types";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -22,13 +24,13 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
   public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
-  }
+  }//React tự gọi khi có lỗi xảy ra trong component con
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
-  }
-
-  public render() {
+  }//React tự gọi sau khi bắt lỗi
+  public render() {//Hàm này sẽ dc react gọi ở lần đầu tiên chạy ứng dụng trên trình duyệt
+                   // và khi state ở trên thay đổi
     if (this.state.hasError) {
       return (
         <div style={{ padding: "3rem", textAlign: "center", fontFamily: "sans-serif", maxWidth: "600px", margin: "4rem auto", backgroundColor: "#fff", borderRadius: "12px", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
@@ -54,7 +56,9 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 function MainApp() {
   const { isAuthenticated } = useAuth();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [importedAssignment, setImportedAssignment] = useState<AssignmentRequest | null>(null);
 
   if (!isAuthenticated) {
     return <AuthForm />;
@@ -62,7 +66,10 @@ function MainApp() {
 
   return (
     <div className="app-layout">
-      <Navbar onCreateNewClick={() => setIsCreateModalOpen(true)} />
+      <Navbar
+        onCreateNewClick={() => setIsCreateModalOpen(true)}
+        onImportPdfClick={() => setIsPdfModalOpen(true)}
+      />
 
       <main className="main-container">
         <AssignmentList
@@ -71,12 +78,28 @@ function MainApp() {
         />
       </main>
 
+      <ImportPdfModal
+        isOpen={isPdfModalOpen}
+        onClose={() => setIsPdfModalOpen(false)}
+        onSuccess={(assignment: AssignmentRequest) => {
+          setImportedAssignment(assignment);
+          setIsPdfModalOpen(false);
+          setIsCreateModalOpen(true);
+        }}
+      />
+
       <CreateAssignmentModal
+        key={importedAssignment ? `imported-${Date.now()}` : "normal"}
         isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
+        onClose={() => {
+          setIsCreateModalOpen(false);
+          setImportedAssignment(null);
+        }}
         onSuccess={() => {
           setRefreshTrigger((prev) => prev + 1);
+          setImportedAssignment(null);
         }}
+        prefillData={importedAssignment}
       />
     </div>
   );

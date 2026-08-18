@@ -601,6 +601,110 @@ button {
   }
 }
 
+/* === Import PDF Modal === */
+.drop-zone {
+  border: 2px dashed rgba(148, 163, 184, 0.4);
+  border-radius: 16px;
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  background: rgba(248, 250, 252, 0.6);
+  margin-bottom: 1rem;
+}
+
+.drop-zone:hover {
+  border-color: rgba(37, 99, 235, 0.5);
+  background: rgba(37, 99, 235, 0.04);
+}
+
+.drop-zone.drag-active {
+  border-color: #2563eb;
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.drop-zone-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  color: #64748b;
+}
+
+.drop-zone-title {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #334155;
+  margin: 0.5rem 0 0;
+}
+
+.drop-zone-hint {
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.pdf-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.pdf-file-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  background: rgba(248, 250, 252, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.pdf-file-icon {
+  color: #2563eb;
+  flex-shrink: 0;
+}
+
+.pdf-file-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.pdf-file-name {
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pdf-file-size {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.btn-remove-file {
+  background: none;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  font-size: 1.1rem;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.btn-remove-file:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.import-pdf-btn {
+  white-space: nowrap;
+}
+
 @media (max-width: 1024px) {
   .topbar,
   .section-header,

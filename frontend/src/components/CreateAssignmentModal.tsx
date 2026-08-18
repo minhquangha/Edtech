@@ -8,6 +8,7 @@ interface CreateAssignmentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  prefillData?: AssignmentRequest | null;
 }
 
 const formatClassLevel = (val: any): string => {
@@ -26,6 +27,7 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
+  prefillData,
 }) => {
   const { token } = useAuth();
 
@@ -63,6 +65,14 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
 
   // Generated Assignment for Review & Edit
   const [generatedAssignment, setGeneratedAssignment] = useState<AssignmentRequest | null>(null);
+
+  // Handle prefill data from PDF import
+  useEffect(() => {
+    if (isOpen && prefillData) {
+      setGeneratedAssignment(prefillData);
+      setStep("review");
+    }
+  }, [isOpen, prefillData]);
 
   // Fetch subjects for grade
   const fetchSubjects = useCallback(async (gradeId: string) => {
