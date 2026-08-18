@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import type { QuestionGroupConfig, Lesson } from "../types";
+import type { QuestionGroupConfig, Lesson, QuestionType } from "../types";
 
 interface QuestionConfigBlockProps {
   config: QuestionGroupConfig;
@@ -206,12 +206,14 @@ export const QuestionConfigBlock: React.FC<QuestionConfigBlockProps> = ({
             onChange={(e) =>
               onUpdate({
                 ...config,
-                type: e.target.value as "SINGLE_CHOICE" | "MULTIPLE_CHOICE",
+                type: e.target.value as QuestionType,
               })
             }
           >
-            <option value="SINGLE_CHOICE">Trắc nghiệm 1 đáp án</option>
-            <option value="MULTIPLE_CHOICE">Trắc nghiệm nhiều đáp án</option>
+            <option value="SINGLE_CHOICE">Một đáp án</option>
+            <option value="MULTIPLE_CHOICE">Nhiều đáp án</option>
+            <option value="TRUE_FALSE">Đúng / Sai</option>
+            <option value="SHORT_ANSWER">Trả lời ngắn</option>
           </select>
         </div>
       </div>
