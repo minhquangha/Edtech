@@ -74,7 +74,6 @@ export const assignmentAiSchema = {
         required: [
           "content",
           "type",
-          "answer",
           "answers",
         ],
       },

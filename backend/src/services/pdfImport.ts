@@ -1,3 +1,4 @@
+import pool from "@/config/db.js";
 import type { AssignmentRequest } from "@/types/assignments.js";
 
 import gemini from "@/config/gemini.js";
@@ -8,6 +9,15 @@ interface PdfFileMeta {
   text: string;
 }
 
+type QuestionType = "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER";
+type Difficulty = "easy" | "medium" | "hard";
+
+interface QuestionGroup {
+  type: QuestionType;
+  count: number;
+  difficulty: Difficulty;
+}
+
 interface GenerateFromPdfsParams {
   files: PdfFileMeta[];
   title?: string | undefined;
@@ -15,10 +25,9 @@ interface GenerateFromPdfsParams {
   subject?: string | undefined;
   classLevel?: string | undefined;
   durationMinutes?: number | undefined;
-  questionCount?: number | undefined;
-  questionType?: "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | undefined;
-  difficulty?: "easy" | "medium" | "hard" | undefined;
+  questionGroups: QuestionGroup[];
   extraRequirements?: string | undefined;
+  gradeId?: number | undefined;
 }
 
 function buildPrompt(params: GenerateFromPdfsParams): string {
@@ -29,9 +38,7 @@ function buildPrompt(params: GenerateFromPdfsParams): string {
     subject,
     classLevel,
     durationMinutes,
-    questionCount,
-    questionType,
-    difficulty,
+    questionGroups,
     extraRequirements,
   } = params;
 
@@ -49,9 +56,21 @@ ${file.text}
     })
     .join("\n");
 
-  const totalQuestions = questionCount && questionCount > 0 ? questionCount : 10;
-  const qType = questionType || "SINGLE_CHOICE";
-  const diff = difficulty || "medium";
+  const totalQuestions = questionGroups.reduce((sum, g) => sum + g.count, 0);
+
+  const groupDescriptions = questionGroups
+    .map((g, i) => {
+      const typeLabel =
+        g.type === "SINGLE_CHOICE"
+          ? "SINGLE_CHOICE (exactly ONE correct answer)"
+          : g.type === "MULTIPLE_CHOICE"
+            ? "MULTIPLE_CHOICE (at least ONE correct answer, may be multiple)"
+            : g.type === "TRUE_FALSE"
+              ? 'TRUE_FALSE (exactly 2 options: "Đúng" and "Sai", exactly ONE correct)'
+              : "SHORT_ANSWER (answer field contains reference text, answers array is empty)";
+      return `  Group ${i + 1}: ${g.count} questions, type = ${typeLabel}, difficulty = ${g.difficulty}`;
+    })
+    .join("\n");
 
   return `
 You are an AI assistant specialized in creating educational assignments.
@@ -85,14 +104,12 @@ SOURCE PDF DOCUMENTS
 ${sourceDocuments}
 
 ========================
-QUESTION REQUIREMENTS
+QUESTION GROUPS
 ========================
 
-The assignment contains exactly ${totalQuestions} questions.
+The assignment contains exactly ${totalQuestions} questions divided into ${questionGroups.length} group(s):
 
-Question type: ${qType}
-
-Difficulty: ${diff}
+${groupDescriptions}
 
 Extra requirements from teacher:
 ${extraRequirements || "None"}
@@ -101,7 +118,7 @@ ${extraRequirements || "None"}
 GENERATION RULES
 ========================
 
-1. Generate exactly ${totalQuestions} questions.
+1. Generate exactly ${totalQuestions} questions following the group specification above.
 
 2. ALL questions must be based ONLY on the content from the source PDF
 documents above.
@@ -112,19 +129,24 @@ documents above.
 
 5. Do not generate duplicate questions.
 
-6. Each question must contain multiple answer options.
-
-7. Every answer option must contain:
-   - content
-   - isCorrect
-
-8. For SINGLE_CHOICE questions:
+6. For SINGLE_CHOICE questions:
    - There must be exactly ONE answer with isCorrect = true.
    - All other answers must have isCorrect = false.
+   - At least 2 answer options.
 
-9. For MULTIPLE_CHOICE questions:
+7. For MULTIPLE_CHOICE questions:
    - There must be at least ONE answer with isCorrect = true.
    - There may be multiple correct answers.
+   - At least 2 answer options.
+
+8. For TRUE_FALSE questions:
+   - There must be exactly 2 answer options: "Đúng" and "Sai".
+   - Exactly ONE answer must have isCorrect = true.
+   - The answer field should be "true" or "false".
+
+9. For SHORT_ANSWER questions:
+   - The answer field must contain the reference answer text.
+   - The answers array must be empty.
 
 10. Do not include the difficulty field in the question output.
 
@@ -144,8 +166,29 @@ Generate the assignment now.
 `;
 }
 
+async function findLessonIds(
+  gradeId: number | undefined,
+  subjectName: string | undefined,
+): Promise<number[]> {
+  if (!gradeId) return [];
+
+  const result = await pool.query(
+    `
+      SELECT l.id
+      FROM "Lessons" l
+      WHERE l.grade_id = $1
+        ${subjectName ? `AND l.subject_id = (SELECT s.id FROM "Subjects" s WHERE s.subject = $2 LIMIT 1)` : ""}
+      ORDER BY l.id
+    `,
+    subjectName ? [gradeId, subjectName] : [gradeId],
+  );
+
+  return result.rows.map((row) => Number(row.id));
+}
+
 function validateAssignmentRequest(
   data: unknown,
+  lessonIds: number[],
 ): AssignmentRequest {
   if (!data || typeof data !== "object") {
     throw new Error("AI response is not a valid object");
@@ -180,6 +223,8 @@ function validateAssignmentRequest(
     throw new Error("AI response missing valid questions array");
   }
 
+  const validTypes = ["SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
+
   for (let i = 0; i < obj.questions.length; i++) {
     const q = obj.questions[i] as Record<string, unknown>;
 
@@ -187,26 +232,38 @@ function validateAssignmentRequest(
       throw new Error(`Question ${i + 1} missing valid content`);
     }
 
-    const qType = (q.question_type ?? q.type) as string;
-    if (qType !== "SINGLE_CHOICE" && qType !== "MULTIPLE_CHOICE") {
+    const qType = (q.type ?? q.question_type) as string;
+    if (!validTypes.includes(qType)) {
       throw new Error(
         `Question ${i + 1} has invalid question_type: ${qType}`,
       );
     }
 
-    if (!Array.isArray(q.answers) || q.answers.length < 2) {
-      throw new Error(`Question ${i + 1} must have at least 2 answers`);
-    }
+    if (qType === "SHORT_ANSWER") {
+      if (typeof q.answer !== "string" || !q.answer.trim()) {
+        throw new Error(`Question ${i + 1} (SHORT_ANSWER) must have answer`);
+      }
+    } else if (qType === "TRUE_FALSE") {
+      if (typeof q.answer !== "string" || (q.answer !== "true" && q.answer !== "false")) {
+        if (!Array.isArray(q.answers) || q.answers.length < 2) {
+          throw new Error(`Question ${i + 1} (TRUE_FALSE) must have answer or 2 options`);
+        }
+      }
+    } else {
+      if (!Array.isArray(q.answers) || q.answers.length < 2) {
+        throw new Error(`Question ${i + 1} must have at least 2 answers`);
+      }
 
-    const hasCorrect = q.answers.some(
-      (a: unknown) =>
-        typeof a === "object" &&
-        a !== null &&
-        (a as Record<string, unknown>).isCorrect === true,
-    );
+      const hasCorrect = q.answers.some(
+        (a: unknown) =>
+          typeof a === "object" &&
+          a !== null &&
+          (a as Record<string, unknown>).isCorrect === true,
+      );
 
-    if (!hasCorrect) {
-      throw new Error(`Question ${i + 1} has no correct answer`);
+      if (!hasCorrect) {
+        throw new Error(`Question ${i + 1} has no correct answer`);
+      }
     }
   }
 
@@ -216,21 +273,27 @@ function validateAssignmentRequest(
     class_level: obj.class_level,
     duration_minutes: obj.duration_minutes,
     subject: obj.subject,
+    lessonIds,
     questions: (obj.questions as Array<Record<string, unknown>>).map(
       (q) => {
-        const qType = (q.question_type ?? q.type) as
-          | "SINGLE_CHOICE"
-          | "MULTIPLE_CHOICE";
+        const qType = (q.type ?? q.question_type) as QuestionType;
+
+        const answers = (qType === "SHORT_ANSWER")
+          ? []
+          : (q.answers as Array<Record<string, unknown>>).map(
+              (a) => ({
+                content: a.content as string,
+                isCorrect: a.isCorrect as boolean,
+              }),
+            );
 
         return {
           content: q.content as string,
           question_type: qType,
-          answers: (q.answers as Array<Record<string, unknown>>).map(
-            (a) => ({
-              content: a.content as string,
-              isCorrect: a.isCorrect as boolean,
-            }),
-          ),
+          ...(qType === "SHORT_ANSWER" || qType === "TRUE_FALSE"
+            ? { answer: String(q.answer ?? (qType === "TRUE_FALSE" ? "true" : "")) }
+            : {}),
+          answers,
         };
       },
     ),
@@ -248,6 +311,10 @@ const PdfImportService = {
         throw new Error("No PDF files provided");
       }
 
+      if (!params.questionGroups || params.questionGroups.length === 0) {
+        throw new Error("No question groups provided");
+      }
+
       for (const file of params.files) {
         if (!file.text || !file.text.trim()) {
           throw new Error(
@@ -256,6 +323,8 @@ const PdfImportService = {
           );
         }
       }
+
+      const lessonIds = await findLessonIds(params.gradeId, params.subject);
 
       const prompt = buildPrompt(params);
 
@@ -279,7 +348,7 @@ const PdfImportService = {
         throw new Error("Gemini returned invalid JSON");
       }
 
-      const assignment = validateAssignmentRequest(parsed);
+      const assignment = validateAssignmentRequest(parsed, lessonIds);
 
       return assignment;
     } catch (error) {

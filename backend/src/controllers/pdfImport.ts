@@ -7,8 +7,8 @@ const MAX_FILES = 5;
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 async function extractPdfText(buffer: Buffer): Promise<string> {
-  const pdf = new PDFParse({ data: buffer });
-  const result = await pdf.getText();
+  const pdf = new PDFParse({ data: buffer }); //chuyển đổi buffer thành đối tượng PDFParse.
+  const result = await pdf.getText(); //trả về dạng { pages, text, total }
   if (typeof result === "string") return result;
   if (result && typeof result === "object") {
     const r = result as { pages?: unknown[]; text?: string };
@@ -64,10 +64,9 @@ const PdfImportController = {
         description,
         subject,
         class_level,
+        grade_id,
         duration_minutes,
-        question_count,
-        question_type,
-        difficulty,
+        question_groups,
         extra_requirements,
       } = req.body;
 
@@ -78,7 +77,7 @@ const PdfImportController = {
 
       for (const file of files) {
         try {
-          const text = await extractPdfText(file.buffer);
+          const text = await extractPdfText(file.buffer);//buffer là nội dung của file PDF.
 
           if (!text.trim()) {
             return res.status(400).json({
@@ -100,6 +99,38 @@ const PdfImportController = {
         }
       }
 
+      // Parse question_groups: frontend gửi qua FormData dạng JSON string
+      let parsedGroups: Array<{
+        type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER";
+        count: number;
+        difficulty: "easy" | "medium" | "hard";
+      }> = [];
+
+      if (question_groups) {
+        try {
+          const raw = typeof question_groups === "string"
+            ? JSON.parse(question_groups)
+            : question_groups;
+          if (Array.isArray(raw) && raw.length > 0) {
+            parsedGroups = raw.map((g: any) => ({
+              type: String(g.type) as "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER",
+              count: Number(g.count) || 1,
+              difficulty: String(g.difficulty) as "easy" | "medium" | "hard",
+            }));
+          }
+        } catch {
+          return res.status(400).json({
+            message: "question_groups không đúng định dạng JSON",
+          });
+        }
+      }
+
+      if (parsedGroups.length === 0) {
+        return res.status(400).json({
+          message: "Vui lòng cấu hình ít nhất 1 nhóm câu hỏi",
+        });
+      }
+
       const assignment: AssignmentRequest =
         await PdfImportService.generateFromPdfs({
           files: parsedFiles,
@@ -107,24 +138,11 @@ const PdfImportController = {
           description: description || undefined,
           subject: subject || undefined,
           classLevel: class_level || undefined,
+          gradeId: grade_id ? Number(grade_id) : undefined,
           durationMinutes: duration_minutes
             ? Number(duration_minutes)
             : undefined,
-          questionCount: question_count
-            ? Number(question_count)
-            : undefined,
-          questionType:
-            question_type === "MULTIPLE_CHOICE"
-              ? "MULTIPLE_CHOICE"
-              : question_type === "SINGLE_CHOICE"
-                ? "SINGLE_CHOICE"
-                : undefined,
-          difficulty:
-            difficulty === "easy" ||
-            difficulty === "medium" ||
-            difficulty === "hard"
-              ? difficulty
-              : undefined,
+          questionGroups: parsedGroups,
           extraRequirements: extra_requirements || undefined,
         });
 

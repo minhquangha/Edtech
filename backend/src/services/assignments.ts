@@ -77,8 +77,9 @@ const AssignmentService = {
         const answers: Answer[] = [];
         if (
           question.question_type === "SINGLE_CHOICE" ||
-          question.question_type === "MULTIPLE_CHOICE"||
-          question.question_type === "TRUE_FALSE"
+          question.question_type === "MULTIPLE_CHOICE" ||
+          question.question_type === "TRUE_FALSE" ||
+          question.question_type === "SHORT_ANSWER"
         ) {
           for (const ans of question.answers) {
             const optionQuery = `
