@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import type { Assignment, AssignmentUpdateRequest } from "../types";
+import type { Assignment, AssignmentUpdateRequest, QuestionType } from "../types";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 
@@ -19,6 +19,36 @@ const formatClassLevel = (val: any): string => {
   const str = String(val).trim();
   if (!str) return "Lớp --";
   return str.startsWith("Lớp") ? str : `Lớp ${str}`;
+};
+
+const getQuestionTypeLabel = (type: QuestionType): string => {
+  switch (type) {
+    case "SINGLE_CHOICE":
+      return "Một đáp án";
+    case "MULTIPLE_CHOICE":
+      return "Nhiều đáp án";
+    case "TRUE_FALSE":
+      return "Đúng / Sai";
+    case "SHORT_ANSWER":
+      return "Trả lời ngắn";
+    default:
+      return type;
+  }
+};
+
+const getQuestionTypeBadgeClass = (type: QuestionType): string => {
+  switch (type) {
+    case "SINGLE_CHOICE":
+      return "type-single";
+    case "MULTIPLE_CHOICE":
+      return "type-multi";
+    case "TRUE_FALSE":
+      return "type-tf";
+    case "SHORT_ANSWER":
+      return "type-sa";
+    default:
+      return "type-single";
+  }
 };
 
 export const AssignmentDetailModal: React.FC<AssignmentDetailModalProps> = ({
@@ -48,16 +78,32 @@ export const AssignmentDetailModal: React.FC<AssignmentDetailModalProps> = ({
       setEditDuration(assignment.duration_minutes || 15);
       setEditDescription(assignment.description || "");
       setEditQuestions(
-        (assignment.questions || []).map((q) => ({
-          id: q.id,
-          content: q.content,
-          question_type: q.question_type || "SINGLE_CHOICE",
-          answers: (q.answers || []).map((a) => ({
-            id: a.id,
-            content: a.content,
-            isCorrect: Boolean(a.isCorrect),
-          })),
-        }))
+        (assignment.questions || []).map((q) => {
+          const qType: QuestionType = q.question_type || "SINGLE_CHOICE";
+          let answerVal = q.answer !== undefined && q.answer !== null ? String(q.answer) : "";
+          if (qType === "TRUE_FALSE" && answerVal !== "true" && answerVal !== "false") {
+            const correctAns = (q.answers || []).find((a) => a.isCorrect);
+            if (correctAns) {
+              answerVal = /đúng|true|1/i.test(correctAns.content) ? "true" : "false";
+            } else {
+              answerVal = "true";
+            }
+          } else if (qType === "SHORT_ANSWER" && !answerVal && q.answers && q.answers.length > 0) {
+            answerVal = q.answers[0].content || "";
+          }
+
+          return {
+            id: q.id,
+            content: q.content,
+            question_type: qType,
+            answer: answerVal,
+            answers: (q.answers || []).map((a) => ({
+              id: a.id,
+              content: a.content,
+              isCorrect: Boolean(a.isCorrect),
+            })),
+          };
+        })
       );
     }
   }, [assignment, isEditing]);
@@ -80,21 +126,69 @@ export const AssignmentDetailModal: React.FC<AssignmentDetailModalProps> = ({
     setEditQuestions(updated);
   };
 
-  const handleQuestionTypeChange = (qIdx: number, type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE") => {
+  const handleQuestionTypeChange = (qIdx: number, newType: QuestionType) => {
     const updated = [...editQuestions];
-    updated[qIdx].question_type = type;
+    const oldQuestion = updated[qIdx];
+
+    if (newType === "TRUE_FALSE") {
+      updated[qIdx] = {
+        ...oldQuestion,
+        question_type: "TRUE_FALSE",
+        answer: oldQuestion.answer === "true" || oldQuestion.answer === "false" ? oldQuestion.answer : "true",
+        answers: [],
+      };
+    } else if (newType === "SHORT_ANSWER") {
+      updated[qIdx] = {
+        ...oldQuestion,
+        question_type: "SHORT_ANSWER",
+        answer: oldQuestion.answer || "",
+        answers: [],
+      };
+    } else {
+      let existingAnswers = oldQuestion.answers || [];
+      if (existingAnswers.length === 0) {
+        existingAnswers = [
+          { id: Date.now() + 1, content: "Lựa chọn A", isCorrect: true },
+          { id: Date.now() + 2, content: "Lựa chọn B", isCorrect: false },
+          { id: Date.now() + 3, content: "Lựa chọn C", isCorrect: false },
+          { id: Date.now() + 4, content: "Lựa chọn D", isCorrect: false },
+        ];
+      } else if (newType === "SINGLE_CHOICE") {
+        let found = false;
+        existingAnswers = existingAnswers.map((a: any) => {
+          if (a.isCorrect && !found) {
+            found = true;
+            return { ...a, isCorrect: true };
+          }
+          return { ...a, isCorrect: false };
+        });
+        if (!found && existingAnswers.length > 0) {
+          existingAnswers[0].isCorrect = true;
+        }
+      }
+      updated[qIdx] = {
+        ...oldQuestion,
+        question_type: newType,
+        answer: "",
+        answers: existingAnswers,
+      };
+    }
     setEditQuestions(updated);
   };
 
   const handleAnswerContentChange = (qIdx: number, aIdx: number, val: string) => {
     const updated = [...editQuestions];
-    updated[qIdx].answers[aIdx].content = val;
-    setEditQuestions(updated);
+    if (updated[qIdx].answers) {
+      updated[qIdx].answers[aIdx].content = val;
+      setEditQuestions(updated);
+    }
   };
 
   const handleToggleCorrect = (qIdx: number, aIdx: number) => {
     const updated = [...editQuestions];
     const question = updated[qIdx];
+    if (!question.answers) return;
+
     if (question.question_type === "SINGLE_CHOICE") {
       question.answers.forEach((ans: any, idx: number) => {
         ans.isCorrect = idx === aIdx;
@@ -105,9 +199,64 @@ export const AssignmentDetailModal: React.FC<AssignmentDetailModalProps> = ({
     setEditQuestions(updated);
   };
 
+  const handleTrueFalseEditChange = (qIdx: number, val: "true" | "false") => {
+    const updated = [...editQuestions];
+    updated[qIdx].answer = val;
+    setEditQuestions(updated);
+  };
+
+  const handleShortAnswerEditChange = (qIdx: number, val: string) => {
+    const updated = [...editQuestions];
+    updated[qIdx].answer = val;
+    setEditQuestions(updated);
+  };
+
   // Submit PUT /assignments/edit/:id
   const handleSaveUpdate = async () => {
     if (!token || !assignment) return;
+
+    // Validate questions
+    for (let i = 0; i < editQuestions.length; i++) {
+      const q = editQuestions[i];
+      const qNum = i + 1;
+      if (!q.content || !q.content.trim()) {
+        setErrorMsg(`Câu ${qNum} không được để trống nội dung`);
+        return;
+      }
+
+      if (q.question_type === "SINGLE_CHOICE") {
+        if (!q.answers || q.answers.length === 0) {
+          setErrorMsg(`Câu ${qNum} phải có ít nhất 1 lựa chọn`);
+          return;
+        }
+        const correctCount = q.answers.filter((a: any) => a.isCorrect).length;
+        if (correctCount !== 1) {
+          setErrorMsg(`Câu ${qNum} (Một đáp án) phải chọn đúng 1 đáp án đúng`);
+          return;
+        }
+      } else if (q.question_type === "MULTIPLE_CHOICE") {
+        if (!q.answers || q.answers.length === 0) {
+          setErrorMsg(`Câu ${qNum} phải có ít nhất 1 lựa chọn`);
+          return;
+        }
+        const correctCount = q.answers.filter((a: any) => a.isCorrect).length;
+        if (correctCount < 1) {
+          setErrorMsg(`Câu ${qNum} (Nhiều đáp án) phải chọn ít nhất 1 đáp án đúng`);
+          return;
+        }
+      } else if (q.question_type === "TRUE_FALSE") {
+        if (q.answer !== "true" && q.answer !== "false") {
+          setErrorMsg(`Câu ${qNum} (Đúng / Sai) chưa chọn đáp án đúng`);
+          return;
+        }
+      } else if (q.question_type === "SHORT_ANSWER") {
+        if (!q.answer || !q.answer.trim()) {
+          setErrorMsg(`Câu ${qNum} (Trả lời ngắn) chưa nhập đáp án đúng`);
+          return;
+        }
+      }
+    }
+
     setIsSaving(true);
     setErrorMsg(null);
 
@@ -118,16 +267,36 @@ export const AssignmentDetailModal: React.FC<AssignmentDetailModalProps> = ({
         class_level: editClassLevel,
         duration_minutes: Number(editDuration) || 15,
         subject: editSubject.trim(),
-        questions: editQuestions.map((q) => ({
-          id: q.id,
-          content: q.content,
-          question_type: q.question_type,
-          answers: q.answers.map((a: any) => ({
-            id: a.id,
-            content: a.content,
-            isCorrect: Boolean(a.isCorrect),
-          })),
-        })),
+        questions: editQuestions.map((q) => {
+          if (q.question_type === "TRUE_FALSE") {
+            return {
+              id: q.id,
+              content: q.content,
+              question_type: q.question_type,
+              answer: q.answer || "true",
+              answers: [],
+            };
+          }
+          if (q.question_type === "SHORT_ANSWER") {
+            return {
+              id: q.id,
+              content: q.content,
+              question_type: q.question_type,
+              answer: q.answer ? q.answer.trim() : "",
+              answers: [],
+            };
+          }
+          return {
+            id: q.id,
+            content: q.content,
+            question_type: q.question_type,
+            answers: (q.answers || []).map((a: any) => ({
+              id: a.id,
+              content: a.content,
+              isCorrect: Boolean(a.isCorrect),
+            })),
+          };
+        }),
       };
 
       await api.updateAssignment(assignment.id, updatePayload, token);
@@ -194,32 +363,64 @@ export const AssignmentDetailModal: React.FC<AssignmentDetailModalProps> = ({
 
               <div className="detail-questions-list">
                 {assignment.questions && assignment.questions.length > 0 ? (
-                  assignment.questions.map((q, index) => (
-                    <div key={q.id || index} className="question-detail-card">
-                      <div className="question-detail-header">
-                        <span className="q-number">Câu {index + 1}:</span>
-                        <span className="q-text">{q.content}</span>
-                        <span className={`q-type-badge ${q.question_type === "SINGLE_CHOICE" ? "type-single" : "type-multi"}`}>
-                          {q.question_type === "SINGLE_CHOICE" ? "1 Đáp án đúng" : "Nhiều đáp án đúng"}
-                        </span>
-                      </div>
+                  assignment.questions.map((q, index) => {
+                    const qType: QuestionType = q.question_type || "SINGLE_CHOICE";
+                    const answerVal = q.answer !== undefined && q.answer !== null ? String(q.answer) : "";
 
-                      <div className="answers-detail-grid">
-                        {q.answers && q.answers.map((ans, aIdx) => (
-                          <div
-                            key={ans.id || aIdx}
-                            className={`answer-detail-item ${ans.isCorrect ? "correct" : ""}`}
-                          >
-                            <span className="ans-prefix">
-                              {String.fromCharCode(65 + aIdx)}.
-                            </span>
-                            <span className="ans-content">{ans.content}</span>
-                            {ans.isCorrect && <span className="correct-mark">✓ Đáp án đúng</span>}
+                    return (
+                      <div key={q.id || index} className="question-detail-card">
+                        <div className="question-detail-header">
+                          <span className="q-number">Câu {index + 1}:</span>
+                          <span className="q-text">{q.content}</span>
+                          <span className={`q-type-badge ${getQuestionTypeBadgeClass(qType)}`}>
+                            {getQuestionTypeLabel(qType)}
+                          </span>
+                        </div>
+
+                        {/* SINGLE_CHOICE / MULTIPLE_CHOICE */}
+                        {(qType === "SINGLE_CHOICE" || qType === "MULTIPLE_CHOICE") && (
+                          <div className="answers-detail-grid">
+                            {q.answers && q.answers.length > 0 ? (
+                              q.answers.map((ans, aIdx) => (
+                                <div
+                                  key={ans.id || aIdx}
+                                  className={`answer-detail-item ${ans.isCorrect ? "correct" : ""}`}
+                                >
+                                  <span className="ans-prefix">
+                                    {String.fromCharCode(65 + aIdx)}.
+                                  </span>
+                                  <span className="ans-content">{ans.content}</span>
+                                  {ans.isCorrect && <span className="correct-mark">✓ Đáp án đúng</span>}
+                                </div>
+                              ))
+                            ) : (
+                              <p className="empty-text">Chưa có danh sách đáp án cho câu hỏi này.</p>
+                            )}
                           </div>
-                        ))}
+                        )}
+
+                        {/* TRUE_FALSE */}
+                        {qType === "TRUE_FALSE" && (
+                          <div className="tf-options-group">
+                            <div className={`tf-btn ${answerVal === "true" ? "selected" : ""}`} style={{ cursor: "default" }}>
+                              {answerVal === "true" ? "✓ Đúng (Đáp án đúng)" : "○ Đúng"}
+                            </div>
+                            <div className={`tf-btn ${answerVal === "false" ? "selected" : ""}`} style={{ cursor: "default" }}>
+                              {answerVal === "false" ? "✓ Sai (Đáp án đúng)" : "○ Sai"}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* SHORT_ANSWER */}
+                        {qType === "SHORT_ANSWER" && (
+                          <div className="short-answer-display-box">
+                            <span>✓ Đáp án đúng:</span>
+                            <strong>{answerVal || (q.answers && q.answers.length > 0 ? q.answers[0].content : "Chưa có đáp án")}</strong>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <p className="empty-text">Chưa có thông tin chi tiết câu hỏi cho bài tập này.</p>
                 )}
@@ -304,11 +505,13 @@ export const AssignmentDetailModal: React.FC<AssignmentDetailModalProps> = ({
                         style={{ width: "auto", padding: "0.3rem 2rem 0.3rem 0.6rem", fontSize: "0.8rem" }}
                         value={q.question_type}
                         onChange={(e) =>
-                          handleQuestionTypeChange(qIndex, e.target.value as any)
+                          handleQuestionTypeChange(qIndex, e.target.value as QuestionType)
                         }
                       >
-                        <option value="SINGLE_CHOICE">Trắc nghiệm 1 đáp án</option>
-                        <option value="MULTIPLE_CHOICE">Trắc nghiệm nhiều đáp án</option>
+                        <option value="SINGLE_CHOICE">Một đáp án</option>
+                        <option value="MULTIPLE_CHOICE">Nhiều đáp án</option>
+                        <option value="TRUE_FALSE">Đúng / Sai</option>
+                        <option value="SHORT_ANSWER">Trả lời ngắn</option>
                       </select>
                     </div>
 
@@ -321,29 +524,66 @@ export const AssignmentDetailModal: React.FC<AssignmentDetailModalProps> = ({
                       />
                     </div>
 
-                    <div className="answers-review-grid">
-                      {q.answers && q.answers.map((ans: any, aIndex: number) => (
-                        <div
-                          key={ans.id || aIndex}
-                          className={`answer-option-row ${ans.isCorrect ? "is-correct" : ""}`}
-                        >
-                          <button
-                            type="button"
-                            className={`btn-check-correct ${ans.isCorrect ? "checked" : ""}`}
-                            onClick={() => handleToggleCorrect(qIndex, aIndex)}
-                            title={ans.isCorrect ? "Đáp án đúng" : "Đánh dấu là đáp án đúng"}
+                    {/* CHOICE-BASED QUESTIONS (SINGLE_CHOICE / MULTIPLE_CHOICE) */}
+                    {(q.question_type === "SINGLE_CHOICE" || q.question_type === "MULTIPLE_CHOICE") && (
+                      <div className="answers-review-grid">
+                        {q.answers && q.answers.map((ans: any, aIndex: number) => (
+                          <div
+                            key={ans.id || aIndex}
+                            className={`answer-option-row ${ans.isCorrect ? "is-correct" : ""}`}
                           >
-                            {ans.isCorrect ? "✓" : ""}
-                          </button>
-                          <input
-                            type="text"
-                            className="answer-input"
-                            value={ans.content}
-                            onChange={(e) => handleAnswerContentChange(qIndex, aIndex, e.target.value)}
-                          />
-                        </div>
-                      ))}
-                    </div>
+                            <button
+                              type="button"
+                              className={`btn-check-correct ${ans.isCorrect ? "checked" : ""}`}
+                              onClick={() => handleToggleCorrect(qIndex, aIndex)}
+                              title={ans.isCorrect ? "Đáp án đúng" : "Đánh dấu là đáp án đúng"}
+                            >
+                              {ans.isCorrect ? "✓" : ""}
+                            </button>
+                            <input
+                              type="text"
+                              className="answer-input"
+                              value={ans.content}
+                              onChange={(e) => handleAnswerContentChange(qIndex, aIndex, e.target.value)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* TRUE / FALSE QUESTION */}
+                    {q.question_type === "TRUE_FALSE" && (
+                      <div className="tf-options-group">
+                        <button
+                          type="button"
+                          className={`tf-btn ${q.answer === "true" ? "selected" : ""}`}
+                          onClick={() => handleTrueFalseEditChange(qIndex, "true")}
+                        >
+                          {q.answer === "true" ? "✓ " : "○ "}Đúng
+                        </button>
+                        <button
+                          type="button"
+                          className={`tf-btn ${q.answer === "false" ? "selected" : ""}`}
+                          onClick={() => handleTrueFalseEditChange(qIndex, "false")}
+                        >
+                          {q.answer === "false" ? "✓ " : "○ "}Sai
+                        </button>
+                      </div>
+                    )}
+
+                    {/* SHORT ANSWER QUESTION */}
+                    {q.question_type === "SHORT_ANSWER" && (
+                      <div className="short-answer-input-group">
+                        <label className="short-answer-label">Đáp án đúng:</label>
+                        <input
+                          type="text"
+                          className="answer-input"
+                          placeholder="Nhập đáp án đúng..."
+                          value={q.answer || ""}
+                          onChange={(e) => handleShortAnswerEditChange(qIndex, e.target.value)}
+                        />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

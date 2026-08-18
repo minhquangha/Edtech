@@ -30,13 +30,15 @@ export interface Lesson {
   title: string;
 }
 
+export type QuestionType = "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER";
+
 // Question configuration for AI generation
 export interface QuestionGroupConfig {
   id: string; // Internal React ID for keying UI
   count: number;
   lessonIds: number[];
   difficulty: "easy" | "medium" | "hard";
-  type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE";
+  type: QuestionType;
 }
 
 export interface LessonPayload {
@@ -50,7 +52,7 @@ export interface LessonPayload {
       count: number;
       lessonIds: number[];
       difficulty: "easy" | "medium" | "hard";
-      type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE";
+      type: QuestionType;
     }>;
   };
 }
@@ -66,8 +68,9 @@ export interface AnswerRequest {
 
 export interface QuestionRequest {
   content: string;
-  question_type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE";
-  answers: AnswerRequest[];
+  question_type: QuestionType;
+  answer?: string;
+  answers?: AnswerRequest[];
 }
 
 export interface AssignmentRequest {
@@ -90,8 +93,9 @@ export interface Question {
   id: number;
   assignmentId: number;
   content: string;
-  question_type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE";
-  answers: Answer[];
+  question_type: QuestionType;
+  answer?: string;
+  answers?: Answer[];
 }
 
 export interface Assignment {
@@ -114,8 +118,9 @@ export interface AnswerUpdateRequest {
 export interface QuestionUpdateRequest {
   id: number;
   content: string;
-  question_type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE";
-  answers: AnswerUpdateRequest[];
+  question_type: QuestionType;
+  answer?: string;
+  answers?: AnswerUpdateRequest[];
 }
 
 export interface AssignmentUpdateRequest {

@@ -2,9 +2,10 @@ export interface Question {
   id: number;
   assignmentId: number;
   content: string;
-  question_type: "MULTIPLE_CHOICE" | "SINGLE_CHOICE";
+  question_type: "MULTIPLE_CHOICE" | "SINGLE_CHOICE"|"TRUE_FALSE"|"SHORT_ANSWER";
   points?: number;
   answers: Answer[];
+  answer?: string;
 }
 
 export interface Answer {
@@ -33,13 +34,15 @@ export interface AssignmentRequest {
   class_level:string;
   duration_minutes: number;
   subject:string;
+  lessonIds: number[];
   questions: QuestionRequest[];
 }
 
 export interface QuestionRequest {
   content: string;
-  question_type: "MULTIPLE_CHOICE" | "SINGLE_CHOICE";
+  question_type: "MULTIPLE_CHOICE" | "SINGLE_CHOICE"|"TRUE_FALSE"|"SHORT_ANSWER";
   answers: AnswerRequest[];
+  answer?: string;
 }
 
 export interface AnswerRequest {
@@ -60,7 +63,7 @@ export interface AssignmentUpdateRequest {
 export interface QuestionUpdateRequest {
   id: number;
   content: string;
-  question_type: "MULTIPLE_CHOICE" | "SINGLE_CHOICE";
+  question_type: "MULTIPLE_CHOICE" | "SINGLE_CHOICE"|"TRUE_FALSE"|"SHORT_ANSWER";
   answers: AnswerUpdateRequest[];
 }
 

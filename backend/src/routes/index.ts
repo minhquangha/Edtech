@@ -5,7 +5,6 @@ import aiRouter from "@/routes/ai.js";
 import pdfImportRouter from "@/routes/pdfImport.js";
 import authenticate from "@/middlewares/authenticator.js";
 const router: Router = Router();
-console.log(4);
 router.use("/ai",aiRouter);
 router.use("/pdf", pdfImportRouter);
 router.use("/users", userRouter);
