@@ -32,9 +32,7 @@ const AiService = {
       // ==========================================
 
       const allLessonIds = [
-        ...new Set(
-          groups.flatMap((group) => group.lessonIds)
-        ),
+        ...new Set(groups.flatMap((group) => group.lessonIds)),
       ];
 
       if (allLessonIds.length === 0) {
@@ -66,26 +64,20 @@ const AiService = {
       // ==========================================
 
       if (lessons.length !== allLessonIds.length) {
-        const existingLessonIds = new Set(
-          lessons.map((lesson) => lesson.id)
-        );
+        const existingLessonIds = new Set(lessons.map((lesson) => lesson.id));
 
         const missingLessonIds = allLessonIds.filter(
-          (id) => !existingLessonIds.has(id)
+          (id) => !existingLessonIds.has(id),
         );
 
-        throw new Error(
-          `Lessons not found: ${missingLessonIds.join(", ")}`
-        );
+        throw new Error(`Lessons not found: ${missingLessonIds.join(", ")}`);
       }
 
       // ==========================================
       // 5. Tạo Map để lấy lesson nhanh
       // ==========================================
 
-      const lessonMap = new Map(
-        lessons.map((lesson) => [lesson.id, lesson])
-      );
+      const lessonMap = new Map(lessons.map((lesson) => [lesson.id, lesson]));
 
       // ==========================================
       // 6. Tính tổng số câu hỏi
@@ -106,9 +98,7 @@ const AiService = {
             const lesson = lessonMap.get(lessonId);
 
             if (!lesson) {
-              throw new Error(
-                `Lesson ${lessonId} not found`
-              );
+              throw new Error(`Lesson ${lessonId} not found`);
             }
 
             return `
@@ -334,16 +324,11 @@ Generate the assignment now.
         throw new Error("Gemini returned an empty response");
       }
 
-      const assignment: AssignmentRequest = JSON.parse(
-        response.text
-      );
+      const assignment: AssignmentRequest = JSON.parse(response.text);
 
       return assignment;
     } catch (error) {
-      console.error(
-        "AI Service - generate assignment error:",
-        error
-      );
+      console.error("AI Service - generate assignment error:", error);
 
       throw error;
     }
