@@ -6,6 +6,7 @@ import type {
   Assignment,
   Subject,
   Lesson,
+  CognitiveLevel
 } from "../types";
 
 // const API_BASE_URL = "/api";
@@ -168,7 +169,7 @@ export const api = {
       question_groups?: Array<{
         type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER";
         count: number;
-        difficulty: "easy" | "medium" | "hard";
+        difficulty: CognitiveLevel;
       }>;
       extra_requirements?: string;
     }

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback } from "react";
-import type { AssignmentRequest, QuestionType } from "../types";
+import type { AssignmentRequest, QuestionType, CognitiveLevel } from "../types";
 import { api } from "../services/api";
 
 interface ImportPdfModalProps {
@@ -11,13 +11,11 @@ interface ImportPdfModalProps {
 const MAX_FILES = 5;
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
-type Difficulty = "easy" | "medium" | "hard";
-
 interface QuestionGroup {
   id: string;
   type: QuestionType;
   count: number;
-  difficulty: Difficulty;
+  difficulty: CognitiveLevel;
 }
 
 const QUESTION_TYPE_ICONS: Record<QuestionType, string> = {
@@ -34,38 +32,32 @@ const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
   SHORT_ANSWER: "Trả lời ngắn",
 };
 
-const DIFFICULTY_LABELS: Record<Difficulty, string> = {
-  easy: "Dễ",
-  medium: "Trung bình",
-  hard: "Khó",
+const LEVEL_LABELS: Record<CognitiveLevel, string> = {
+  NB: "Nhận biết",
+  TH: "Thông hiểu",
+  VD: "Vận dụng",
 };
 
-const DIFFICULTY_COLORS: Record<Difficulty, string> = {
-  easy: "var(--diff-easy, #10b981)",
-  medium: "var(--diff-medium, #f59e0b)",
-  hard: "var(--diff-hard, #ef4444)",
+const LEVEL_COLORS: Record<CognitiveLevel, string> = {
+  NB: "var(--diff-easy, #10b981)",
+  TH: "var(--diff-medium, #f59e0b)",
+  VD: "var(--diff-hard, #ef4444)",
 };
 
-export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({
-  isOpen,
-  onClose,
-  onSuccess,
-}) => {
+export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Metadata
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("");
   const [classLevel, setClassLevel] = useState("");
   const [durationMinutes, setDurationMinutes] = useState(30);
   const [extraRequirements, setExtraRequirements] = useState("");
 
-  // Question groups
   const [groups, setGroups] = useState<QuestionGroup[]>([
-    { id: "g-1", type: "SINGLE_CHOICE", count: 5, difficulty: "medium" },
+    { id: "g-1", type: "SINGLE_CHOICE", count: 5, difficulty: "TH" },
   ]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -79,7 +71,7 @@ export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({
     setClassLevel("");
     setDurationMinutes(30);
     setExtraRequirements("");
-    setGroups([{ id: "g-1", type: "SINGLE_CHOICE", count: 5, difficulty: "medium" }]);
+    setGroups([{ id: "g-1", type: "SINGLE_CHOICE", count: 5, difficulty: "TH" }]);
     groupCounter.current = 1;
   }, []);
 
@@ -88,24 +80,19 @@ export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({
     onClose();
   };
 
-  // ── File handling ──
-
   const validateAndAddFiles = (incoming: File[]) => {
     setErrorMsg(null);
-
     const pdfFiles = incoming.filter((f) => f.type === "application/pdf");
     if (pdfFiles.length !== incoming.length) {
       setErrorMsg("Chỉ chấp nhận file PDF.");
       return;
     }
-
     for (const f of pdfFiles) {
       if (f.size > MAX_FILE_SIZE) {
         setErrorMsg(`File "${f.name}" vượt quá giới hạn 10MB.`);
         return;
       }
     }
-
     setFiles((prev) => {
       const combined = [...prev, ...pdfFiles];
       if (combined.length > MAX_FILES) {
@@ -117,9 +104,7 @@ export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      validateAndAddFiles(Array.from(e.target.files));
-    }
+    if (e.target.files) validateAndAddFiles(Array.from(e.target.files));
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -148,14 +133,9 @@ export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  // ── Question group handling ──
-
   const addGroup = () => {
     groupCounter.current += 1;
-    setGroups((prev) => [
-      ...prev,
-      { id: `g-${groupCounter.current}`, type: "SINGLE_CHOICE", count: 5, difficulty: "medium" },
-    ]);
+    setGroups((prev) => [...prev, { id: `g-${groupCounter.current}`, type: "SINGLE_CHOICE", count: 5, difficulty: "TH" }]);
   };
 
   const updateGroup = (id: string, patch: Partial<QuestionGroup>) => {
@@ -167,15 +147,16 @@ export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({
   };
 
   const totalQuestions = groups.reduce((sum, g) => sum + (g.count || 0), 0);
-
-  // ── Submit ──
+  const levelSummary = groups.reduce<Record<CognitiveLevel, number>>((acc, g) => {
+    acc[g.difficulty] += g.count || 0;
+    return acc;
+  }, { NB: 0, TH: 0, VD: 0 });
 
   const handleGenerate = async () => {
     if (files.length === 0) {
       setErrorMsg("Vui lòng tải lên ít nhất 1 file PDF.");
       return;
     }
-
     if (totalQuestions === 0) {
       setErrorMsg("Tổng số câu hỏi phải lớn hơn 0.");
       return;
@@ -205,22 +186,13 @@ export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({
         return {
           content: q.content || "",
           question_type: qType,
-          ...(qType === "SHORT_ANSWER" || qType === "TRUE_FALSE"
-            ? { answer: String(q.answer ?? "") }
-            : {}),
-          answers: (q.answers || []).map((a: any) => ({
-            content: a.content || "",
-            isCorrect: Boolean(a.isCorrect),
-          })),
+          cognitive_level: q.cognitive_level || "TH",
+          ...(qType === "SHORT_ANSWER" || qType === "TRUE_FALSE" ? { answer: String(q.answer ?? "") } : {}),
+          answers: (q.answers || []).map((a: any) => ({ content: a.content || "", isCorrect: Boolean(a.isCorrect) })),
         };
       });
 
-      const normalized: AssignmentRequest = {
-        ...rawData,
-        questions: normalizedQuestions,
-      };
-
-      onSuccess(normalized);
+      onSuccess({ ...rawData, questions: normalizedQuestions });
       resetState();
     } catch (err: any) {
       setErrorMsg(err.message || "Không thể tạo bài tập từ PDF. Vui lòng thử lại!");
@@ -234,19 +206,14 @@ export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({
   return (
     <div className="modal-backdrop">
       <div className="modal-container modal-large">
-        {/* Header */}
         <div className="modal-header">
           <div className="modal-title-group">
-            <h3>
-              <span className="sparkle-icon">📄</span> Import PDF & Tạo Đề Mới
-            </h3>
+            <h3><span className="sparkle-icon">📄</span> Import PDF & Tạo Đề Mới</h3>
             <p className="modal-subtitle">
-              Tải lên PDF, AI đọc nội dung và tự động sinh đề thi theo cấu hình của bạn
+              Tải lên PDF, AI đọc nội dung và tự động sinh đề thi theo ma trận NB/TH/VD của bạn
             </p>
           </div>
-          <button className="btn-close" onClick={handleClose} disabled={isGenerating} aria-label="Đóng">
-            ✕
-          </button>
+          <button className="btn-close" onClick={handleClose} disabled={isGenerating} aria-label="Đóng">✕</button>
         </div>
 
         {errorMsg && (
@@ -261,7 +228,6 @@ export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({
         )}
 
         <div className="modal-body">
-          {/* ── STEP 1: Upload PDF ── */}
           <div className="pdf-import-step">
             <div className="pdf-import-step-label">
               <span className="step-number">1</span>
@@ -280,14 +246,7 @@ export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({
               onKeyDown={(e) => { if (e.key === "Enter") fileInputRef.current?.click(); }}
               aria-label="Kéo thả hoặc chọn file PDF"
             >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="application/pdf"
-                multiple
-                onChange={handleFileSelect}
-                style={{ display: "none" }}
-              />
+              <input ref={fileInputRef} type="file" accept="application/pdf" multiple onChange={handleFileSelect} style={{ display: "none" }} />
               <div className="pdf-drop-icon">
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -299,9 +258,7 @@ export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({
                 <strong>Kéo thả file PDF vào đây</strong>
                 <span>hoặc bấm để chọn từ thiết bị</span>
               </div>
-              <div className="pdf-drop-badge">
-                Tối đa {MAX_FILES} file · mỗi file ≤ 10MB
-              </div>
+              <div className="pdf-drop-badge">Tối đa {MAX_FILES} file · mỗi file ≤ 10MB</div>
             </div>
 
             {files.length > 0 && (
@@ -318,13 +275,7 @@ export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({
                       <span className="pdf-file-name">{file.name}</span>
                       <span className="pdf-file-size">{formatFileSize(file.size)}</span>
                     </div>
-                    <button
-                      type="button"
-                      className="pdf-file-remove"
-                      onClick={(e) => { e.stopPropagation(); removeFile(index); }}
-                      disabled={isGenerating}
-                      aria-label={`Xóa file ${file.name}`}
-                    >
+                    <button type="button" className="pdf-file-remove" onClick={(e) => { e.stopPropagation(); removeFile(index); }} disabled={isGenerating} aria-label={`Xóa file ${file.name}`}>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                         <line x1="18" y1="6" x2="6" y2="18" />
                         <line x1="6" y1="6" x2="18" y2="18" />
@@ -336,7 +287,6 @@ export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({
             )}
           </div>
 
-          {/* ── STEP 2: Metadata ── */}
           <div className="pdf-import-step">
             <div className="pdf-import-step-label">
               <span className="step-number">2</span>
@@ -347,92 +297,44 @@ export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({
             <div className="pdf-meta-grid">
               <div className="form-group">
                 <label htmlFor="pdf-title">Tiêu đề</label>
-                <input
-                  id="pdf-title"
-                  type="text"
-                  placeholder="VD: Kiểm tra 15 phút chương 1"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  disabled={isGenerating}
-                />
+                <input id="pdf-title" type="text" placeholder="VD: Kiểm tra 15 phút chương 1" value={title} onChange={(e) => setTitle(e.target.value)} disabled={isGenerating} />
               </div>
               <div className="form-group">
                 <label htmlFor="pdf-subject">Môn học</label>
-                <input
-                  id="pdf-subject"
-                  type="text"
-                  placeholder="VD: Vật lý"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  disabled={isGenerating}
-                />
+                <input id="pdf-subject" type="text" placeholder="VD: Vật lý" value={subject} onChange={(e) => setSubject(e.target.value)} disabled={isGenerating} />
               </div>
               <div className="form-group">
                 <label htmlFor="pdf-class">Lớp</label>
-                <input
-                  id="pdf-class"
-                  type="text"
-                  placeholder="VD: 12"
-                  value={classLevel}
-                  onChange={(e) => setClassLevel(e.target.value)}
-                  disabled={isGenerating}
-                />
+                <input id="pdf-class" type="text" placeholder="VD: 12" value={classLevel} onChange={(e) => setClassLevel(e.target.value)} disabled={isGenerating} />
               </div>
               <div className="form-group">
                 <label htmlFor="pdf-duration">Thời gian (phút)</label>
-                <input
-                  id="pdf-duration"
-                  type="number"
-                  min={5}
-                  max={180}
-                  value={durationMinutes}
-                  onChange={(e) => setDurationMinutes(parseInt(e.target.value) || 30)}
-                  disabled={isGenerating}
-                />
+                <input id="pdf-duration" type="number" min={5} max={180} value={durationMinutes} onChange={(e) => setDurationMinutes(parseInt(e.target.value) || 30)} disabled={isGenerating} />
               </div>
             </div>
           </div>
 
-          {/* ── STEP 3: Question Groups ── */}
           <div className="pdf-import-step">
             <div className="pdf-import-step-label">
               <span className="step-number">3</span>
-              <span className="step-title">Cấu hình câu hỏi</span>
-              <span className="step-meta">
-                <strong>{totalQuestions}</strong> câu · {groups.length} nhóm
-              </span>
+              <span className="step-title">Cấu hình ma trận NB / TH / VD</span>
+              <span className="step-meta"><strong>{totalQuestions}</strong> câu · {groups.length} nhóm</span>
             </div>
 
             <div className="question-group-list">
               {groups.map((group, index) => (
                 <div key={group.id} className="qg-card">
-                  {/* Card header */}
                   <div className="qg-card-top">
-                    <div className="qg-card-id">
-                      <span className="qg-card-num">{index + 1}</span>
-                    </div>
+                    <div className="qg-card-id"><span className="qg-card-num">{index + 1}</span></div>
                     <div className="qg-card-tags">
-                      <span className="qg-tag qg-tag-type">
-                        <span className="qg-tag-icon">{QUESTION_TYPE_ICONS[group.type]}</span>
-                        {QUESTION_TYPE_LABELS[group.type]}
-                      </span>
+                      <span className="qg-tag qg-tag-type"><span className="qg-tag-icon">{QUESTION_TYPE_ICONS[group.type]}</span>{QUESTION_TYPE_LABELS[group.type]}</span>
                       <span className="qg-tag qg-tag-count">{group.count} câu</span>
-                      <span
-                        className="qg-tag qg-tag-diff"
-                        style={{ "--diff-color": DIFFICULTY_COLORS[group.difficulty] } as React.CSSProperties}
-                      >
-                        {DIFFICULTY_LABELS[group.difficulty]}
+                      <span className="qg-tag qg-tag-diff" style={{ "--diff-color": LEVEL_COLORS[group.difficulty] } as React.CSSProperties}>
+                        {LEVEL_LABELS[group.difficulty]}
                       </span>
                     </div>
                     {groups.length > 1 && (
-                      <button
-                        type="button"
-                        className="qg-card-delete"
-                        onClick={() => removeGroup(group.id)}
-                        disabled={isGenerating}
-                        title="Xóa nhóm này"
-                        aria-label={`Xóa nhóm ${index + 1}`}
-                      >
+                      <button type="button" className="qg-card-delete" onClick={() => removeGroup(group.id)} disabled={isGenerating} title="Xóa nhóm này" aria-label={`Xóa nhóm ${index + 1}`}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                           <line x1="18" y1="6" x2="6" y2="18" />
                           <line x1="6" y1="6" x2="18" y2="18" />
@@ -441,16 +343,10 @@ export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({
                     )}
                   </div>
 
-                  {/* Card controls */}
                   <div className="qg-card-controls">
                     <div className="form-group">
                       <label>Loại câu hỏi</label>
-                      <select
-                        className="custom-select"
-                        value={group.type}
-                        onChange={(e) => updateGroup(group.id, { type: e.target.value as QuestionType })}
-                        disabled={isGenerating}
-                      >
+                      <select className="custom-select" value={group.type} onChange={(e) => updateGroup(group.id, { type: e.target.value as QuestionType })} disabled={isGenerating}>
                         <option value="SINGLE_CHOICE">Trắc nghiệm 1 đáp án</option>
                         <option value="MULTIPLE_CHOICE">Trắc nghiệm nhiều đáp án</option>
                         <option value="TRUE_FALSE">Đúng / Sai</option>
@@ -459,26 +355,14 @@ export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({
                     </div>
                     <div className="form-group">
                       <label>Số lượng</label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={50}
-                        value={group.count}
-                        onChange={(e) => updateGroup(group.id, { count: Math.max(1, parseInt(e.target.value) || 1) })}
-                        disabled={isGenerating}
-                      />
+                      <input type="number" min={1} max={50} value={group.count} onChange={(e) => updateGroup(group.id, { count: Math.max(1, parseInt(e.target.value) || 1) })} disabled={isGenerating} />
                     </div>
                     <div className="form-group">
-                      <label>Độ khó</label>
-                      <select
-                        className="custom-select"
-                        value={group.difficulty}
-                        onChange={(e) => updateGroup(group.id, { difficulty: e.target.value as Difficulty })}
-                        disabled={isGenerating}
-                      >
-                        <option value="easy">Dễ</option>
-                        <option value="medium">Trung bình</option>
-                        <option value="hard">Khó</option>
+                      <label>Mức độ nhận thức</label>
+                      <select className="custom-select" value={group.difficulty} onChange={(e) => updateGroup(group.id, { difficulty: e.target.value as CognitiveLevel })} disabled={isGenerating}>
+                        <option value="NB">Nhận biết</option>
+                        <option value="TH">Thông hiểu</option>
+                        <option value="VD">Vận dụng</option>
                       </select>
                     </div>
                   </div>
@@ -486,12 +370,7 @@ export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({
               ))}
             </div>
 
-            <button
-              type="button"
-              className="qg-add-btn"
-              onClick={addGroup}
-              disabled={isGenerating}
-            >
+            <button type="button" className="qg-add-btn" onClick={addGroup} disabled={isGenerating}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                 <line x1="12" y1="5" x2="12" y2="19" />
                 <line x1="5" y1="12" x2="19" y2="12" />
@@ -499,40 +378,31 @@ export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({
               Thêm nhóm câu hỏi
             </button>
 
-            <div className="form-group" style={{ marginTop: "16px" }}>
-              <label htmlFor="pdf-extra">Yêu cầu thêm (không bắt buộc)</label>
-              <textarea
-                id="pdf-extra"
-                rows={2}
-                placeholder="VD: Tập trung vào phần bài tập cuối chương, tránh câu hỏi lý thuyết..."
-                value={extraRequirements}
-                onChange={(e) => setExtraRequirements(e.target.value)}
-                disabled={isGenerating}
-              />
+            <div className="config-section" style={{ marginTop: 16 }}>
+              <div className="config-section-header">
+                <div>
+                  <h4>Ma trận đề thi theo NB / TH / VD</h4>
+                  <span className="config-hint">Hệ thống sẽ gắn mức độ cho từng câu theo cấu hình bên dưới</span>
+                </div>
+                <div className="detail-badges">
+                  <span className="badge-tag">NB: {levelSummary.NB}</span>
+                  <span className="badge-tag">TH: {levelSummary.TH}</span>
+                  <span className="badge-tag">VD: {levelSummary.VD}</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Actions */}
+          <div className="form-group">
+            <label htmlFor="pdf-extra">Yêu cầu thêm (không bắt buộc)</label>
+            <textarea id="pdf-extra" rows={2} placeholder="VD: Tập trung vào phần bài tập cuối chương, tránh câu hỏi lý thuyết..." value={extraRequirements} onChange={(e) => setExtraRequirements(e.target.value)} disabled={isGenerating} />
+          </div>
+
           <div className="modal-footer">
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={handleClose}
-              disabled={isGenerating}
-            >
-              Hủy bỏ
-            </button>
-            <button
-              type="button"
-              className="btn-primary btn-ai-generate"
-              onClick={handleGenerate}
-              disabled={isGenerating || files.length === 0 || totalQuestions === 0}
-            >
+            <button type="button" className="btn-secondary" onClick={handleClose} disabled={isGenerating}>Hủy bỏ</button>
+            <button type="button" className="btn-primary btn-ai-generate" onClick={handleGenerate} disabled={isGenerating || files.length === 0 || totalQuestions === 0}>
               {isGenerating ? (
-                <span className="spinner-container">
-                  <span className="spinner"></span>
-                  <span>AI đang đọc PDF & tạo đề thi...</span>
-                </span>
+                <span className="spinner-container"><span className="spinner"></span><span>AI đang đọc PDF & tạo đề thi...</span></span>
               ) : (
                 <>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>

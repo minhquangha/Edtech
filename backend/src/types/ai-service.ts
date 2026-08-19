@@ -1,26 +1,27 @@
+import type { CognitiveLevel, QuestionType } from "@/types/assignments.js";
+
 export interface QuestionConfigPayload {
   groups: QuestionGroupConfig[];
 }
 
 export interface QuestionGroupConfig {
-  topic:string;
+  topic?: string;
   count: number;
-  difficulty: "easy" | "medium" | "hard";
-  type: "MULTIPLE_CHOICE"|"SINGLE_CHOICE"|"TRUE_FALSE"|"SHORT_ANSWER";
+  difficulty: CognitiveLevel;
+  type: QuestionType;
   lessonIds: number[];
 }
 
 export interface LessonPayload {
   class_level: string | number;
   subject: string;
-  topic: string; 
+  topic?: string;
   title: string;
   description?: string;
   time_duration: number;
   question_config: QuestionConfigPayload;
-  
-}
-export interface AiRequest{
-    data: LessonPayload
 }
 
+export interface AiRequest {
+  data: LessonPayload;
+}

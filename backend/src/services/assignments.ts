@@ -135,109 +135,107 @@ const AssignmentService = {
     }
   },
   getById: async (assignmentId: number): Promise<Assignment | null> => {
-  const result = await pool.query(
-    `
-    SELECT
-      a.id AS assignment_id,
-      a.title,
-      a.description,
-      a.duration_minutes,
-      a.teacher_id,
+    const metadataResult = await pool.query(
+      `
+      SELECT DISTINCT ON (a.id)
+        a.id AS assignment_id,
+        a.title,
+        a.description,
+        a.duration_minutes,
+        a.teacher_id,
 
-      s.id AS subject_id,
-      s.subject AS subject,
+        s.id AS subject_id,
+        s.subject AS subject,
 
-      g.id AS grade_id,
-      g.grade AS class_level,
-
-      q.id AS question_id,
-      q.content AS question_content,
-      q.question_type,
-      q.answer AS question_answer,
-
-      qo.id AS option_id,
-      qo.content AS option_content,
-      qo.is_correct
-
-    FROM "Assignment" a
-
-    LEFT JOIN "Lesson_Assignment" la
-      ON a.id = la.assignment_id
-
-    LEFT JOIN "Lessons" l
-      ON la.lesson_id = l.id
-
-    LEFT JOIN "Subjects" s
-      ON l.subject_id = s.id
-
-    LEFT JOIN "Grades" g
-      ON l.grade_id = g.id
-
-    LEFT JOIN "Assignment_Question" aq
-      ON a.id = aq.assignment_id
-
-    LEFT JOIN "Question" q
-      ON aq.question_id = q.id
-
-    LEFT JOIN "Question_Options" qo
-      ON q.id = qo.question_id
-
-    WHERE a.id = $1
-
-    ORDER BY q.id, qo.id
-    `,
-    [assignmentId],
-  );
-
-  if (result.rows.length === 0) {
-    return null;
-  }
-
-  const firstRow = result.rows[0];
-
-  const assignment: Assignment = {
-    id: firstRow.assignment_id,
-    title: firstRow.title,
-    description: firstRow.description,
-    duration_minutes: firstRow.duration_minutes,
-    teacher_id: firstRow.teacher_id,
-
-    subject: firstRow.subject,
-    class_level: firstRow.class_level,
-
-    questions: [],
-  };
-
-  for (const row of result.rows) {
-    let question = assignment.questions.find(
-      (q) => q.id === row.question_id,
+        g.id AS grade_id,
+        g.grade AS class_level
+      FROM "Assignment" a
+      LEFT JOIN "Lesson_Assignment" la
+        ON a.id = la.assignment_id
+      LEFT JOIN "Lessons" l
+        ON la.lesson_id = l.id
+      LEFT JOIN "Subjects" s
+        ON l.subject_id = s.id
+      LEFT JOIN "Grades" g
+        ON l.grade_id = g.id
+      WHERE a.id = $1
+      ORDER BY a.id, la.lesson_id NULLS LAST
+      `,
+      [assignmentId],
     );
 
-    if (!question) {
-      question = {
-        id: row.question_id,
-        assignmentId: assignment.id,
-        content: row.question_content,
-        question_type: row.question_type,
-        answer: row.question_answer,
-        answers: [],
-      };
-
-      assignment.questions.push(question);
+    if (metadataResult.rows.length === 0) {
+      return null;
     }
 
-    if (row.option_id !== null) {
-      question.answers.push({
-        id: row.option_id,
-        questionId: row.question_id,
-        content: row.option_content,
-        isCorrect: row.is_correct,
-      });
-    }
-  }
+    const firstRow = metadataResult.rows[0];
 
-  return assignment;
-},
+    const assignment: Assignment = {
+      id: firstRow.assignment_id,
+      title: firstRow.title,
+      description: firstRow.description,
+      duration_minutes: firstRow.duration_minutes,
+      teacher_id: firstRow.teacher_id,
+      subject: firstRow.subject,
+      class_level: firstRow.class_level,
+      questions: [],
+    };
+
+    const questionsResult = await pool.query(
+      `
+      SELECT
+        q.id AS question_id,
+        q.content AS question_content,
+        q.question_type,
+        q.answer AS question_answer,
+        qo.id AS option_id,
+        qo.content AS option_content,
+        qo.is_correct
+      FROM "Assignment_Question" aq
+      INNER JOIN "Question" q
+        ON aq.question_id = q.id
+      LEFT JOIN "Question_Options" qo
+        ON q.id = qo.question_id
+      WHERE aq.assignment_id = $1
+      ORDER BY q.id, qo.id
+      `,
+      [assignmentId],
+    );
+
+    const optionDedup = new Set<string>();
+
+    for (const row of questionsResult.rows) {
+      let question = assignment.questions.find((q) => q.id === row.question_id);
+
+      if (!question) {
+        question = {
+          id: row.question_id,
+          assignmentId: assignment.id,
+          content: row.question_content,
+          question_type: row.question_type,
+          answer: row.question_answer,
+          answers: [],
+        };
+
+        assignment.questions.push(question);
+      }
+
+      if (row.option_id !== null) {
+        const dedupeKey = `${row.question_id}::${row.option_content}::${Boolean(row.is_correct)}`;
+        if (optionDedup.has(dedupeKey)) continue;
+        optionDedup.add(dedupeKey);
+
+        question.answers.push({
+          id: row.option_id,
+          questionId: row.question_id,
+          content: row.option_content,
+          isCorrect: row.is_correct,
+        });
+      }
+    }
+
+    return assignment;
+  },
   getByTeacherId: async (userId: number): Promise<Assignment[]> => {
   const result = await pool.query(
     `

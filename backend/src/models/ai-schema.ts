@@ -1,91 +1,41 @@
 export const assignmentAiSchema = {
   type: "object",
-
   properties: {
-    title: {
-      type: "string",
-    },
-
-    description: {
-      type: "string",
-    },
-
-    class_level: {
-      type: "string",
-    },
-
-    duration_minutes: {
-      type: "integer",
-    },
-
-    subject: {
-      type: "string",
-    },
-
+    title: { type: "string" },
+    description: { type: "string" },
+    class_level: { type: "string" },
+    duration_minutes: { type: "integer" },
+    subject: { type: "string" },
     questions: {
       type: "array",
-
       items: {
         type: "object",
-
         properties: {
-          content: {
-            type: "string",
-          },
-
+          content: { type: "string" },
           type: {
             type: "string",
-            enum: [
-              "MULTIPLE_CHOICE",
-              "SINGLE_CHOICE",
-              "TRUE_FALSE",
-              "SHORT_ANSWER",
-            ],
+            enum: ["MULTIPLE_CHOICE", "SINGLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"],
           },
-
-          answer: {
+          answer: { type: "string" },
+          cognitive_level: {
             type: "string",
+            enum: ["NB", "TH", "VD"],
           },
-
           answers: {
             type: "array",
-
             items: {
               type: "object",
-
               properties: {
-                content: {
-                  type: "string",
-                },
-
-                isCorrect: {
-                  type: "boolean",
-                },
+                content: { type: "string" },
+                isCorrect: { type: "boolean" },
               },
-
-              required: [
-                "content",
-                "isCorrect",
-              ],
+              required: ["content", "isCorrect"],
             },
           },
         },
-
-        required: [
-          "content",
-          "type",
-          "answers",
-        ],
+        required: ["content", "type", "answers", "cognitive_level"],
       },
     },
   },
-
-  required: [
-    "title",
-    "description",
-    "class_level",
-    "duration_minutes",
-    "subject",
-    "questions",
-  ],
+  required: ["title", "description", "class_level", "duration_minutes", "subject", "questions"],
 };

@@ -31,13 +31,14 @@ export interface Lesson {
 }
 
 export type QuestionType = "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER";
+export type CognitiveLevel = "NB" | "TH" | "VD";
 
 // Question configuration for AI generation
 export interface QuestionGroupConfig {
   id: string; // Internal React ID for keying UI
   count: number;
   lessonIds: number[];
-  difficulty: "easy" | "medium" | "hard";
+  difficulty: CognitiveLevel;
   type: QuestionType;
 }
 
@@ -51,7 +52,7 @@ export interface LessonPayload {
     groups: Array<{
       count: number;
       lessonIds: number[];
-      difficulty: "easy" | "medium" | "hard";
+      difficulty: CognitiveLevel;
       type: QuestionType;
     }>;
   };
