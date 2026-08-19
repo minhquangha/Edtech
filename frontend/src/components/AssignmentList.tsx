@@ -3,6 +3,7 @@ import type { Assignment } from "../types";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { AssignmentDetailModal } from "./AssignmentDetailModal";
+import { PrintablePreview } from "./PrintablePreview";
 
 interface AssignmentListProps {
   onCreateNewClick: () => void;
@@ -31,7 +32,11 @@ export const AssignmentList: React.FC<AssignmentListProps> = ({
   const [isDetailLoading, setIsDetailLoading] = useState<boolean>(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  const fetchAssignments = useCallback(async () => {
+  // Print preview state
+  const [printAssignment, setPrintAssignment] = useState<Assignment | null>(null);
+  const [printShowAnswers, setPrintShowAnswers] = useState<boolean>(false);
+
+  const fetchAssignments = useCallback(async () => {//chỉ chạy khi dc gọi và hàm sẽ thay đổi khi token thay đổi
     if (!token) return;
     setIsLoading(true);
     setErrorMsg(null);
@@ -75,6 +80,19 @@ export const AssignmentList: React.FC<AssignmentListProps> = ({
       alert(err.message || "Không thể xóa bài tập");
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  // Fetch full detail (with questions+answers) then open print preview
+  const handlePrintPreview = async (id: number, showAnswers: boolean, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!token) return;
+    try {
+      const res = await api.getAssignmentById(id, token);
+      setPrintShowAnswers(showAnswers);
+      setPrintAssignment(res.data);
+    } catch (err: any) {
+      alert(err.message || "Không thể tải chi tiết bài tập để in");
     }
   };
 
@@ -188,22 +206,49 @@ export const AssignmentList: React.FC<AssignmentListProps> = ({
 
                 <div className="card-footer">
                   <span className="card-hint">Click để xem câu hỏi & đáp án</span>
-                  <button
-                    type="button"
-                    className="btn-delete-card"
-                    onClick={(e) => handleDelete(assignment.id, e)}
-                    disabled={deletingId === assignment.id}
-                    title="Xóa bài tập"
-                  >
-                    {deletingId === assignment.id ? (
-                      <span className="spinner"></span>
-                    ) : (
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <polyline points="3 6 5 6 21 6"></polyline>
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  <div className="card-action-btns">
+                    <button
+                      type="button"
+                      className="btn-card-icon"
+                      onClick={(e) => handlePrintPreview(assignment.id, false, e)}
+                      title="Xem trước & in đề thi (không có đáp án)"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="6 9 6 2 18 2 18 9" />
+                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                        <rect x="6" y="14" width="12" height="8" />
                       </svg>
-                    )}
-                  </button>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-card-icon"
+                      onClick={(e) => handlePrintPreview(assignment.id, true, e)}
+                      title="Xem trước & in đề + đáp án"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                        <line x1="9" y1="15" x2="15" y2="15" />
+                        <line x1="9" y1="11" x2="15" y2="11" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-card-icon btn-card-danger"
+                      onClick={(e) => handleDelete(assignment.id, e)}
+                      disabled={deletingId === assignment.id}
+                      title="Xóa bài tập"
+                    >
+                      {deletingId === assignment.id ? (
+                        <span className="spinner"></span>
+                      ) : (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="3 6 5 6 21 6"></polyline>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -227,6 +272,15 @@ export const AssignmentList: React.FC<AssignmentListProps> = ({
           assignment={selectedAssignment}
           onClose={() => setSelectedAssignment(null)}
           onSuccess={fetchAssignments}
+        />
+      )}
+
+      {/* Print Preview Modal */}
+      {printAssignment && (
+        <PrintablePreview
+          assignment={printAssignment}
+          showAnswers={printShowAnswers}
+          onClose={() => setPrintAssignment(null)}
         />
       )}
 
