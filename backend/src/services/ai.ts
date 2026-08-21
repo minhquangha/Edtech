@@ -29,9 +29,6 @@ const AiService = {
         throw new Error("At least one question group is required");
       }
 
-<<<<<<< HEAD
-      const allLessonIds = [...new Set(groups.flatMap((group) => group.lessonIds))];
-=======
       // ==========================================
       // 2. Lấy tất cả lessonIds từ các groups
       // ==========================================
@@ -40,7 +37,6 @@ const AiService = {
         ...new Set(groups.flatMap((group) => group.lessonIds)),
       ];
 
->>>>>>> origin/main
       if (allLessonIds.length === 0) {
         throw new Error("At least one lesson must be selected");
       }
@@ -189,7 +185,6 @@ Generate the assignment now.
         throw new Error("Gemini returned an empty response");
       }
 
-<<<<<<< HEAD
       const raw = JSON.parse(response.text) as any;
       const normalized: AssignmentRequest = {
         title: raw.title,
@@ -209,17 +204,10 @@ Generate the assignment now.
           })),
         })),
       } as AssignmentRequest;
-=======
-      const assignment: AssignmentRequest = JSON.parse(response.text);
->>>>>>> origin/main
 
       return normalized;
     } catch (error) {
       console.error("AI Service - generate assignment error:", error);
-<<<<<<< HEAD
-=======
-
->>>>>>> origin/main
       throw error;
     }
   },

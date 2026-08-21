@@ -1,7 +1,7 @@
-export type CognitiveLevel = "NB" | "TH" | "VD";
+
 export type QuestionType = "MULTIPLE_CHOICE" | "SINGLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER";
 export type CognitiveLevel = "NB" | "TH" | "VD";
-export type QuestionType = "MULTIPLE_CHOICE" | "SINGLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER";
+
 
 export interface Question {
   id: number;
@@ -70,7 +70,6 @@ export interface QuestionUpdateRequest {
   content: string;
   question_type: QuestionType;
   answers: AnswerUpdateRequest[];
-   cognitive_level?: CognitiveLevel;
   answer?: string;
   cognitive_level?: CognitiveLevel;
 }
