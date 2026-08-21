@@ -9,20 +9,17 @@ const AiController = {
   create: async (req: Request, res: Response) => {
     try {
       const demand: AiRequest = req.body;
-      // Gọi AI Service để generate assignment
-      const assignment: AssignmentRequest =
-        await AiService.create(demand);
+      const assignment: AssignmentRequest = await AiService.create(demand);
 
       return res.status(200).json({
         message: "Assignment generated successfully",
         data: assignment,
       });
-
     } catch (error) {
       console.error("AI Controller Error:", error);
 
       return res.status(500).json({
-        message: "Failed to generate assignment",
+        message: error instanceof Error ? error.message : "Failed to generate assignment",
       });
     }
   },

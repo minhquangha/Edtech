@@ -1,9 +1,4 @@
-import { Router } from "express";
 import multer from "multer";
-import PdfImportController from "@/controllers/pdfImport.js";
-
-const router: Router = Router();
-
 const storage = multer.memoryStorage();//Dữ liệu upload sẽ lưu trữ vào RAM
 
 const upload = multer({
@@ -22,11 +17,4 @@ const upload = multer({
     cb(null, true); //chấp nhận upload file này
   },
 });
-
-router.post(
-  "/import",
-  upload.array("pdfs", 5),//cho phép nhận file từ field có tên pdfs, tối đa 5 file.các file nằm trong req.files
-  PdfImportController.import,
-);
-
-export default router;
+export default upload;

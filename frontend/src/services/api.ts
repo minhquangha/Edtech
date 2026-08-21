@@ -6,6 +6,7 @@ import type {
   Assignment,
   Subject,
   Lesson,
+  CognitiveLevel
 } from "../types";
 
 // const API_BASE_URL = "/api";
@@ -153,5 +154,45 @@ export const api = {
       body: JSON.stringify(assignment),
     });
     return handleResponse<{ message: string }>(res);
+  },
+
+  // PDF Import → AI Generate
+  importPdfsAndGenerate: async (
+    files: File[],
+    options: {
+      title?: string;
+      description?: string;
+      subject?: string;
+      class_level?: string;
+      grade_id?: number;
+      duration_minutes?: number;
+      question_groups?: Array<{
+        type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER";
+        count: number;
+        difficulty: CognitiveLevel;
+      }>;
+      extra_requirements?: string;
+    }
+  ): Promise<{ message: string; data: AssignmentRequest }> => {
+    const formData = new FormData();
+    for (const file of files) {
+      formData.append("pdfs", file);
+    }
+    if (options.title) formData.append("title", options.title);
+    if (options.description) formData.append("description", options.description);
+    if (options.subject) formData.append("subject", options.subject);
+    if (options.class_level) formData.append("class_level", options.class_level);
+    if (options.grade_id) formData.append("grade_id", String(options.grade_id));
+    if (options.duration_minutes) formData.append("duration_minutes", String(options.duration_minutes));
+    if (options.question_groups) {
+      formData.append("question_groups", JSON.stringify(options.question_groups));
+    }
+    if (options.extra_requirements) formData.append("extra_requirements", options.extra_requirements);
+
+    const res = await fetch(`${API_BASE_URL}/pdf/import`, {
+      method: "POST",
+      body: formData,
+    });
+    return handleResponse<{ message: string; data: AssignmentRequest }>(res);
   },
 };

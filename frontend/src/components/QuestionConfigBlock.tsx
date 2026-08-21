@@ -11,6 +11,12 @@ interface QuestionConfigBlockProps {
   onDelete: () => void;
 }
 
+const LEVEL_LABELS = {
+  NB: "Nhận biết",
+  TH: "Thông hiểu",
+  VD: "Vận dụng",
+} as const;
+
 export const QuestionConfigBlock: React.FC<QuestionConfigBlockProps> = ({
   config,
   index,
@@ -69,22 +75,15 @@ export const QuestionConfigBlock: React.FC<QuestionConfigBlockProps> = ({
           Nhóm câu hỏi #{index + 1}
         </span>
         {canDelete && (
-          <button
-            type="button"
-            className="btn-icon-delete"
-            onClick={onDelete}
-            title="Xóa nhóm câu hỏi này"
-            aria-label="Xóa nhóm câu hỏi"
-          >
+          <button type="button" className="btn-icon-delete" onClick={onDelete} title="Xóa nhóm câu hỏi này" aria-label="Xóa nhóm câu hỏi">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
         )}
       </div>
 
-      {/* Select Lessons Multi-Select */}
       <div className="form-group margin-bottom-sm">
         <label>
           Bài học <span style={{ color: "var(--danger)" }}>*</span>
@@ -105,13 +104,7 @@ export const QuestionConfigBlock: React.FC<QuestionConfigBlockProps> = ({
                 selectedLessons.map((l) => (
                   <span key={l.id} className="chip-item">
                     <span>Bài {l.lesson_number}</span>
-                    <button
-                      type="button"
-                      className="chip-remove"
-                      onClick={(e) => removeLesson(l.id, e)}
-                    >
-                      ✕
-                    </button>
+                    <button type="button" className="chip-remove" onClick={(e) => removeLesson(l.id, e)}>✕</button>
                   </span>
                 ))
               )}
@@ -122,18 +115,10 @@ export const QuestionConfigBlock: React.FC<QuestionConfigBlockProps> = ({
           {isOpen && availableLessons.length > 0 && (
             <div className="multi-select-dropdown">
               <div className="dropdown-header-actions">
-                <button
-                  type="button"
-                  className="btn-link"
-                  onClick={() => onUpdate({ ...config, lessonIds: availableLessons.map((l) => l.id) })}
-                >
+                <button type="button" className="btn-link" onClick={() => onUpdate({ ...config, lessonIds: availableLessons.map((l) => l.id) })}>
                   Chọn tất cả
                 </button>
-                <button
-                  type="button"
-                  className="btn-link"
-                  onClick={() => onUpdate({ ...config, lessonIds: [] })}
-                >
+                <button type="button" className="btn-link" onClick={() => onUpdate({ ...config, lessonIds: [] })}>
                   Bỏ chọn tất cả
                 </button>
               </div>
@@ -142,14 +127,8 @@ export const QuestionConfigBlock: React.FC<QuestionConfigBlockProps> = ({
                   const isChecked = (config.lessonIds || []).includes(l.id);
                   return (
                     <label key={l.id} className={`dropdown-option-item ${isChecked ? "selected" : ""}`}>
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => toggleLesson(l.id)}
-                      />
-                      <span className="option-label">
-                        {formatLessonTitle(l)}
-                      </span>
+                      <input type="checkbox" checked={isChecked} onChange={() => toggleLesson(l.id)} />
+                      <span className="option-label">{formatLessonTitle(l)}</span>
                     </label>
                   );
                 })}
@@ -160,7 +139,6 @@ export const QuestionConfigBlock: React.FC<QuestionConfigBlockProps> = ({
       </div>
 
       <div className="config-block-grid">
-        {/* 1. Số lượng câu hỏi */}
         <div className="form-group">
           <label htmlFor={`count-${config.id}`}>Số lượng câu hỏi</label>
           <input
@@ -176,9 +154,8 @@ export const QuestionConfigBlock: React.FC<QuestionConfigBlockProps> = ({
           />
         </div>
 
-        {/* 2. Độ khó */}
         <div className="form-group">
-          <label htmlFor={`difficulty-${config.id}`}>Độ khó</label>
+          <label htmlFor={`difficulty-${config.id}`}>Mức độ nhận thức</label>
           <select
             id={`difficulty-${config.id}`}
             className="custom-select"
@@ -186,29 +163,23 @@ export const QuestionConfigBlock: React.FC<QuestionConfigBlockProps> = ({
             onChange={(e) =>
               onUpdate({
                 ...config,
-                difficulty: e.target.value as "easy" | "medium" | "hard",
+                difficulty: e.target.value as "NB" | "TH" | "VD",
               })
             }
           >
-            <option value="easy">Dễ</option>
-            <option value="medium">Trung bình</option>
-            <option value="hard">Khó</option>
+            <option value="NB">Nhận biết</option>
+            <option value="TH">Thông hiểu</option>
+            <option value="VD">Vận dụng</option>
           </select>
         </div>
 
-        {/* 3. Loại câu hỏi */}
         <div className="form-group">
           <label htmlFor={`type-${config.id}`}>Loại câu hỏi</label>
           <select
             id={`type-${config.id}`}
             className="custom-select"
             value={config.type}
-            onChange={(e) =>
-              onUpdate({
-                ...config,
-                type: e.target.value as QuestionType,
-              })
-            }
+            onChange={(e) => onUpdate({ ...config, type: e.target.value as QuestionType })}
           >
             <option value="SINGLE_CHOICE">Một đáp án</option>
             <option value="MULTIPLE_CHOICE">Nhiều đáp án</option>
@@ -216,6 +187,10 @@ export const QuestionConfigBlock: React.FC<QuestionConfigBlockProps> = ({
             <option value="SHORT_ANSWER">Trả lời ngắn</option>
           </select>
         </div>
+      </div>
+
+      <div className="detail-badges" style={{ marginTop: 12 }}>
+        <span className="badge-tag">{LEVEL_LABELS[config.difficulty]}</span>
       </div>
     </div>
   );
