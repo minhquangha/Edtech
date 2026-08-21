@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback } from "react";
-import type { AssignmentRequest, QuestionType, CognitiveLevel } from "../types";
+import type { AssignmentRequest, QuestionType, CognitiveLevel, RawQuestionResponse } from "../types";
 import { api } from "../services/api";
 
 interface ImportPdfModalProps {
@@ -181,21 +181,21 @@ export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({ isOpen, onClose,
       });
 
       const rawData = result.data;
-      const normalizedQuestions = (rawData.questions || []).map((q: any) => {
+      const normalizedQuestions = (rawData.questions || []).map((q: RawQuestionResponse) => {
         const qType: QuestionType = q.question_type || q.type || "SINGLE_CHOICE";
         return {
           content: q.content || "",
           question_type: qType,
           cognitive_level: q.cognitive_level || "TH",
           ...(qType === "SHORT_ANSWER" || qType === "TRUE_FALSE" ? { answer: String(q.answer ?? "") } : {}),
-          answers: (q.answers || []).map((a: any) => ({ content: a.content || "", isCorrect: Boolean(a.isCorrect) })),
+          answers: (q.answers || []).map((a) => ({ content: a.content || "", isCorrect: Boolean(a.isCorrect) })),
         };
       });
 
       onSuccess({ ...rawData, questions: normalizedQuestions });
       resetState();
-    } catch (err: any) {
-      setErrorMsg(err.message || "Không thể tạo bài tập từ PDF. Vui lòng thử lại!");
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || "Không thể tạo bài tập từ PDF. Vui lòng thử lại!");
     } finally {
       setIsGenerating(false);
     }

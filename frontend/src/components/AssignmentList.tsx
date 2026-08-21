@@ -10,7 +10,7 @@ interface AssignmentListProps {
   refreshTrigger: number;
 }
 
-const formatClassLevel = (val: any): string => {
+const formatClassLevel = (val: string | number | null | undefined): string => {
   if (val === null || val === undefined) return "Lớp --";
   const str = String(val).trim();
   if (!str) return "Lớp --";
@@ -43,8 +43,8 @@ export const AssignmentList: React.FC<AssignmentListProps> = ({
     try {
       const res = await api.getAssignments(token);
       setAssignments(res.data || []);
-    } catch (err: any) {
-      setErrorMsg(err.message || "Không thể tải danh sách bài tập từ máy chủ");
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || "Không thể tải danh sách bài tập từ máy chủ");
     } finally {
       setIsLoading(false);
     }
@@ -60,8 +60,8 @@ export const AssignmentList: React.FC<AssignmentListProps> = ({
     try {
       const res = await api.getAssignmentById(id, token);
       setSelectedAssignment(res.data);
-    } catch (err: any) {
-      alert(err.message || "Không thể tải chi tiết bài tập");
+    } catch (err: unknown) {
+      alert((err as Error).message || "Không thể tải chi tiết bài tập");
     } finally {
       setIsDetailLoading(false);
     }
@@ -76,8 +76,8 @@ export const AssignmentList: React.FC<AssignmentListProps> = ({
     try {
       await api.deleteAssignment(id, token);
       setAssignments((prev) => prev.filter((a) => a?.id !== id));
-    } catch (err: any) {
-      alert(err.message || "Không thể xóa bài tập");
+    } catch (err: unknown) {
+      alert((err as Error).message || "Không thể xóa bài tập");
     } finally {
       setDeletingId(null);
     }
@@ -91,8 +91,8 @@ export const AssignmentList: React.FC<AssignmentListProps> = ({
       const res = await api.getAssignmentById(id, token);
       setPrintShowAnswers(showAnswers);
       setPrintAssignment(res.data);
-    } catch (err: any) {
-      alert(err.message || "Không thể tải chi tiết bài tập để in");
+    } catch (err: unknown) {
+      alert((err as Error).message || "Không thể tải chi tiết bài tập để in");
     }
   };
 

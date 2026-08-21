@@ -1,13 +1,13 @@
 import React from "react";
-import type { Assignment, QuestionType } from "../types";
+import type { Assignment, AssignmentRequest, QuestionType } from "../types";
 
 interface PrintablePreviewProps {
-  assignment: Assignment | (Omit<Assignment, "id" | "teacher_id"> & { id?: number; teacher_id?: number });
+  assignment: Assignment | AssignmentRequest | (Omit<Assignment, "id" | "teacher_id"> & { id?: number; teacher_id?: number });
   showAnswers: boolean;
   onClose: () => void;
 }
 
-const formatClassLevel = (val: any): string => {
+const formatClassLevel = (val: string | number | null | undefined): string => {
   if (val === null || val === undefined) return "";
   const str = String(val).trim();
   return str.startsWith("Lớp") ? str : `Lớp ${str}`;
@@ -75,7 +75,7 @@ export const PrintablePreview: React.FC<PrintablePreviewProps> = ({ assignment, 
                 {questions.map((q, qIdx) => {
                   const qType = q.question_type || "SINGLE_CHOICE";
                   const answerVal = q.answer !== undefined && q.answer !== null ? String(q.answer) : "";
-                  const cognitive = (q as any).cognitive_level || "TH";
+                  const cognitive = q.cognitive_level || "TH";
 
                   return (
                     <div key={q.id || qIdx} className="print-question">

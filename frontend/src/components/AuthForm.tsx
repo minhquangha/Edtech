@@ -35,8 +35,8 @@ export const AuthForm: React.FC = () => {
       } else {
         await register(username.trim(), password);
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || "Đã xảy ra lỗi. Vui lòng thử lại.");
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || "Đã xảy ra lỗi. Vui lòng thử lại.");
     }
   };
 

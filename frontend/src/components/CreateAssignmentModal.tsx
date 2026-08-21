@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
-import type { QuestionGroupConfig, AssignmentRequest, Subject, Lesson, AiRequest, QuestionType } from "../types";
+import type { QuestionGroupConfig, AssignmentRequest, QuestionRequest, Subject, Lesson, AiRequest, QuestionType, RawQuestionResponse } from "../types";
 import { QuestionConfigBlock } from "./QuestionConfigBlock";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
@@ -42,7 +42,7 @@ const getQuestionTypeBadgeClass = (type: QuestionType): string => {
   }
 };
 
-const formatClassLevel = (val: any): string => {
+const formatClassLevel = (val: string | number | null | undefined): string => {
   if (val === null || val === undefined) return "Lớp --";
   const str = String(val).trim();
   if (!str) return "Lớp --";
@@ -112,7 +112,7 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
     try {
       const data = await api.getSubjects(gradeId, token);
       setSubjects(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Lỗi khi lấy danh sách môn học:", err);
       setSubjects([]);
     } finally {
@@ -125,7 +125,7 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
     try {
       const data = await api.getLessons(gradeId, subjectId, token);
       setLessons(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Lỗi khi lấy danh sách bài học:", err);
       setLessons([]);
     } finally {
@@ -181,7 +181,7 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
   }, [configs]);
 
   const generatedLevelSummary = useMemo(() => {
-    return (generatedAssignment?.questions || []).reduce<Record<"NB" | "TH" | "VD", number>>((acc, q: any) => {
+    return (generatedAssignment?.questions || []).reduce<Record<"NB" | "TH" | "VD", number>>((acc, q) => {
       const level = q.cognitive_level === "NB" || q.cognitive_level === "TH" || q.cognitive_level === "VD" ? q.cognitive_level : "TH";
       acc[level] += 1;
       return acc;
@@ -281,16 +281,16 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
 
       const result = await api.generateAiAssignment(payload);
       const rawData = result.data;
-      const normalizedQuestions = (rawData.questions || []).map((q: any) => {
+      const normalizedQuestions = (rawData.questions || []).map((q: RawQuestionResponse): QuestionRequest => {
         const qType: QuestionType = q.question_type || q.type || "SINGLE_CHOICE";
         let answerVal = q.answer !== undefined && q.answer !== null ? String(q.answer) : "";
         const cognitiveLevel = q.cognitive_level || "TH";
 
         if (qType === "TRUE_FALSE") {
           if (answerVal !== "true" && answerVal !== "false") {
-            const correctAns = (q.answers || []).find((a: any) => a.isCorrect);
+            const correctAns = (q.answers || []).find((a) => a.isCorrect);
             if (correctAns) {
-              answerVal = /đúng|true|1/i.test(correctAns.content) ? "true" : "false";
+              answerVal = /đúng|true|1/i.test(String(correctAns.content || "")) ? "true" : "false";
             } else {
               answerVal = "true";
             }
@@ -306,7 +306,7 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
           question_type: qType,
           cognitive_level: cognitiveLevel,
           answer: answerVal,
-          answers: (q.answers || []).map((a: any) => ({
+          answers: (q.answers || []).map((a) => ({
             content: a.content || "",
             isCorrect: Boolean(a.isCorrect),
           })),
@@ -318,8 +318,8 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
         questions: normalizedQuestions,
       });
       setStep("review");
-    } catch (err: any) {
-      setErrorMsg(err.message || "Không thể tạo bài tập bằng AI. Vui lòng thử lại!");
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || "Không thể tạo bài tập bằng AI. Vui lòng thử lại!");
     } finally {
       setIsAiGenerating(false);
     }
@@ -341,7 +341,7 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
           setErrorMsg(`Câu ${qNum} phải có ít nhất 1 lựa chọn`);
           return;
         }
-        const correctCount = q.answers.filter((a: any) => a.isCorrect).length;
+        const correctCount = q.answers.filter((a) => a.isCorrect).length;
         if (correctCount !== 1) {
           setErrorMsg(`Câu ${qNum} (Một đáp án) phải chọn đúng 1 đáp án đúng`);
           return;
@@ -351,7 +351,7 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
           setErrorMsg(`Câu ${qNum} phải có ít nhất 1 lựa chọn`);
           return;
         }
-        const correctCount = q.answers.filter((a: any) => a.isCorrect).length;
+        const correctCount = q.answers.filter((a) => a.isCorrect).length;
         if (correctCount < 1) {
           setErrorMsg(`Câu ${qNum} (Nhiều đáp án) phải chọn ít nhất 1 đáp án đúng`);
           return;
@@ -375,28 +375,28 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
     try {
       const assignmentToSave: AssignmentRequest = {
         ...generatedAssignment,
-        questions: generatedAssignment.questions.map((q: any) => {
+        questions: generatedAssignment.questions.map((q): QuestionRequest => {
           const qType: QuestionType = q.question_type || "SINGLE_CHOICE";
           if (qType === "TRUE_FALSE") {
-            return { content: q.content, question_type: qType, answer: q.answer || "true", answers: [], cognitive_level: q.cognitive_level } as any;
+            return { content: q.content, question_type: qType, answer: q.answer || "true", answers: [], cognitive_level: q.cognitive_level };
           }
           if (qType === "SHORT_ANSWER") {
-            return { content: q.content, question_type: qType, answer: q.answer ? q.answer.trim() : "", answers: [], cognitive_level: q.cognitive_level } as any;
+            return { content: q.content, question_type: qType, answer: q.answer ? q.answer.trim() : "", answers: [], cognitive_level: q.cognitive_level };
           }
           return {
             content: q.content,
             question_type: qType,
-            answers: (q.answers || []).map((a: any) => ({ content: a.content, isCorrect: Boolean(a.isCorrect) })),
+            answers: (q.answers || []).map((a) => ({ content: a.content, isCorrect: Boolean(a.isCorrect) })),
             cognitive_level: q.cognitive_level,
-          } as any;
+          };
         }),
       };
 
       await api.createAssignment(assignmentToSave, token);
       onSuccess();
       handleResetAndClose();
-    } catch (err: any) {
-      setErrorMsg(err.message || "Lỗi khi lưu bài tập xuống cơ sở dữ liệu");
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || "Lỗi khi lưu bài tập xuống cơ sở dữ liệu");
     } finally {
       setIsSaving(false);
     }
@@ -449,7 +449,7 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
     if (!question.answers) return;
 
     if (question.question_type === "SINGLE_CHOICE") {
-      question.answers.forEach((ans: any, idx: number) => {
+      question.answers.forEach((ans, idx: number) => {
         ans.isCorrect = idx === aIndex;
       });
     } else {
@@ -611,7 +611,7 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
                   <div className="question-review-header">
                     <span className="q-number">Câu {qIndex + 1}:</span>
                     <span className={`q-type-badge ${getQuestionTypeBadgeClass(q.question_type)}`}>{getQuestionTypeLabel(q.question_type)}</span>
-                    <span className="badge-tag" style={{ marginLeft: "auto" }}>{LEVEL_LABELS[(q as any).cognitive_level || "TH"]}</span>
+                    <span className="badge-tag" style={{ marginLeft: "auto" }}>{LEVEL_LABELS[q.cognitive_level || "TH"]}</span>
                   </div>
 
                   <div className="form-group">
@@ -620,7 +620,7 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
 
                   {(q.question_type === "SINGLE_CHOICE" || q.question_type === "MULTIPLE_CHOICE") && (
                     <div className="answers-review-grid">
-                      {q.answers && q.answers.map((ans: any, aIndex: number) => (
+                      {q.answers && q.answers.map((ans, aIndex: number) => (
                         <div key={aIndex} className={`answer-option-row ${ans.isCorrect ? "is-correct" : ""}`}>
                           <button type="button" className={`btn-check-correct ${ans.isCorrect ? "checked" : ""}`} onClick={() => handleCorrectAnswerToggle(qIndex, aIndex)} title={ans.isCorrect ? "Đáp án đúng" : "Đánh dấu là đáp án đúng"}>{ans.isCorrect ? "✓" : ""}</button>
                           <input type="text" className="answer-input" value={ans.content} onChange={(e) => handleAnswerContentChange(qIndex, aIndex, e.target.value)} />
@@ -663,7 +663,7 @@ export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
       </div>
 
       {showPrintPreview && generatedAssignment && (
-        <PrintablePreview assignment={generatedAssignment as any} showAnswers={printShowAnswers} onClose={() => setShowPrintPreview(false)} />
+        <PrintablePreview assignment={generatedAssignment} showAnswers={printShowAnswers} onClose={() => setShowPrintPreview(false)} />
       )}
     </div>
   );

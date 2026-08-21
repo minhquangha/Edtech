@@ -4,6 +4,7 @@ import type {
   AiRequest,
   AssignmentRequest,
   Assignment,
+  AssignmentUpdateRequest,
   Subject,
   Lesson,
   CognitiveLevel
@@ -44,7 +45,7 @@ export const api = {
         headers: getHeaders(token),
       });
     }
-    const data = await handleResponse<any>(res);
+    const data = await handleResponse<Subject[] | { data: Subject[] }>(res);
     if (Array.isArray(data)) return data;
     if (data && Array.isArray(data.data)) return data.data;
     return [];
@@ -61,7 +62,7 @@ export const api = {
         headers: getHeaders(token),
       });
     }
-    const data = await handleResponse<any>(res);
+    const data = await handleResponse<Lesson[] | { data: Lesson[] }>(res);
     if (Array.isArray(data)) return data;
     if (data && Array.isArray(data.data)) return data.data;
     return [];
@@ -145,7 +146,7 @@ export const api = {
 
   updateAssignment: async (
     id: number,
-    assignment: any,
+    assignment: AssignmentUpdateRequest,
     token: string
   ): Promise<{ message: string }> => {
     const res = await fetch(`${API_BASE_URL}/assignments/edit/${id}`, {

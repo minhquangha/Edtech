@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import type { Assignment, AssignmentUpdateRequest, QuestionType } from "../types";
+import type { Assignment, AssignmentUpdateRequest, QuestionType, Question, EditableQuestion } from "../types";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { PrintablePreview } from "./PrintablePreview";
@@ -15,7 +15,7 @@ const CLASS_OPTIONS = Array.from({ length: 12 }, (_, i) => ({
   value: `${i + 1}`,
 }));
 
-const formatClassLevel = (val: any): string => {
+const formatClassLevel = (val: string | number | null | undefined): string => {
   if (val === null || val === undefined) return "Lớp --";
   const str = String(val).trim();
   if (!str) return "Lớp --";
@@ -68,7 +68,7 @@ export const AssignmentDetailModal: React.FC<AssignmentDetailModalProps> = ({
   const [editClassLevel, setEditClassLevel] = useState<string>("10");
   const [editDuration, setEditDuration] = useState<number>(15);
   const [editDescription, setEditDescription] = useState<string>("");
-  const [editQuestions, setEditQuestions] = useState<any[]>([]);
+  const [editQuestions, setEditQuestions] = useState<EditableQuestion[]>([]);
 
   // Print preview state
   const [showPrintPreview, setShowPrintPreview] = useState<boolean>(false);
@@ -160,7 +160,7 @@ export const AssignmentDetailModal: React.FC<AssignmentDetailModalProps> = ({
         ];
       } else if (newType === "SINGLE_CHOICE") {
         let found = false;
-        existingAnswers = existingAnswers.map((a: any) => {
+        existingAnswers = existingAnswers.map((a) => {
           if (a.isCorrect && !found) {
             found = true;
             return { ...a, isCorrect: true };
@@ -184,7 +184,7 @@ export const AssignmentDetailModal: React.FC<AssignmentDetailModalProps> = ({
   const handleAnswerContentChange = (qIdx: number, aIdx: number, val: string) => {
     const updated = [...editQuestions];
     if (updated[qIdx].answers) {
-      updated[qIdx].answers[aIdx].content = val;
+      updated[qIdx].answers![aIdx].content = val;
       setEditQuestions(updated);
     }
   };
@@ -195,7 +195,7 @@ export const AssignmentDetailModal: React.FC<AssignmentDetailModalProps> = ({
     if (!question.answers) return;
 
     if (question.question_type === "SINGLE_CHOICE") {
-      question.answers.forEach((ans: any, idx: number) => {
+      question.answers.forEach((ans, idx: number) => {
         ans.isCorrect = idx === aIdx;
       });
     } else {
@@ -234,7 +234,7 @@ export const AssignmentDetailModal: React.FC<AssignmentDetailModalProps> = ({
           setErrorMsg(`Câu ${qNum} phải có ít nhất 1 lựa chọn`);
           return;
         }
-        const correctCount = q.answers.filter((a: any) => a.isCorrect).length;
+        const correctCount = q.answers.filter((a) => a.isCorrect).length;
         if (correctCount !== 1) {
           setErrorMsg(`Câu ${qNum} (Một đáp án) phải chọn đúng 1 đáp án đúng`);
           return;
@@ -244,7 +244,7 @@ export const AssignmentDetailModal: React.FC<AssignmentDetailModalProps> = ({
           setErrorMsg(`Câu ${qNum} phải có ít nhất 1 lựa chọn`);
           return;
         }
-        const correctCount = q.answers.filter((a: any) => a.isCorrect).length;
+        const correctCount = q.answers.filter((a) => a.isCorrect).length;
         if (correctCount < 1) {
           setErrorMsg(`Câu ${qNum} (Nhiều đáp án) phải chọn ít nhất 1 đáp án đúng`);
           return;
@@ -295,7 +295,7 @@ export const AssignmentDetailModal: React.FC<AssignmentDetailModalProps> = ({
             id: q.id,
             content: q.content,
             question_type: q.question_type,
-            answers: (q.answers || []).map((a: any) => ({
+            answers: (q.answers || []).map((a) => ({
               id: a.id,
               content: a.content,
               isCorrect: Boolean(a.isCorrect),
@@ -312,12 +312,12 @@ export const AssignmentDetailModal: React.FC<AssignmentDetailModalProps> = ({
       assignment.class_level = updatePayload.class_level;
       assignment.duration_minutes = updatePayload.duration_minutes;
       assignment.subject = updatePayload.subject;
-      assignment.questions = updatePayload.questions as any;
+      assignment.questions = updatePayload.questions as Question[];
 
       setIsEditing(false);
       if (onSuccess) onSuccess();
-    } catch (err: any) {
-      setErrorMsg(err.message || "Không thể cập nhật bài tập");
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || "Không thể cập nhật bài tập");
     } finally {
       setIsSaving(false);
     }
@@ -532,7 +532,7 @@ export const AssignmentDetailModal: React.FC<AssignmentDetailModalProps> = ({
                     {/* CHOICE-BASED QUESTIONS (SINGLE_CHOICE / MULTIPLE_CHOICE) */}
                     {(q.question_type === "SINGLE_CHOICE" || q.question_type === "MULTIPLE_CHOICE") && (
                       <div className="answers-review-grid">
-                        {q.answers && q.answers.map((ans: any, aIndex: number) => (
+                        {q.answers && q.answers.map((ans, aIndex: number) => (
                           <div
                             key={ans.id || aIndex}
                             className={`answer-option-row ${ans.isCorrect ? "is-correct" : ""}`}

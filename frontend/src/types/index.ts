@@ -63,15 +63,18 @@ export interface AiRequest {
 }
 
 export interface AnswerRequest {
+  id?: number;
   content: string;
   isCorrect: boolean;
 }
 
 export interface QuestionRequest {
+  id?: number;
   content: string;
   question_type: QuestionType;
   answer?: string;
   answers?: AnswerRequest[];
+  cognitive_level?: CognitiveLevel;
 }
 
 export interface AssignmentRequest {
@@ -97,6 +100,7 @@ export interface Question {
   question_type: QuestionType;
   answer?: string;
   answers?: Answer[];
+  cognitive_level?: CognitiveLevel;
 }
 
 export interface Assignment {
@@ -111,17 +115,18 @@ export interface Assignment {
 }
 
 export interface AnswerUpdateRequest {
-  id: number;
+  id?: number;
   content: string;
   isCorrect: boolean;
 }
 
 export interface QuestionUpdateRequest {
-  id: number;
+  id?: number;
   content: string;
   question_type: QuestionType;
   answer?: string;
   answers?: AnswerUpdateRequest[];
+  cognitive_level?: CognitiveLevel;
 }
 
 export interface AssignmentUpdateRequest {
@@ -132,3 +137,31 @@ export interface AssignmentUpdateRequest {
   subject: string;
   questions: QuestionUpdateRequest[];
 }
+
+export interface EditableAnswer {
+  id?: number;
+  content: string;
+  isCorrect: boolean;
+}
+
+export interface EditableQuestion {
+  id?: number;
+  content: string;
+  question_type: QuestionType;
+  answer?: string;
+  answers?: EditableAnswer[];
+  cognitive_level?: CognitiveLevel;
+}
+
+export interface RawQuestionResponse {
+  content?: string;
+  type?: QuestionType;
+  question_type?: QuestionType;
+  cognitive_level?: CognitiveLevel;
+  answer?: string | number | boolean;
+  answers?: Array<{
+    content?: string;
+    isCorrect?: boolean | number | string;
+  }>;
+}
+
