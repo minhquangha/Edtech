@@ -1,6 +1,3 @@
-import pool from "@/config/db.js";
-import type { AssignmentRequest } from "@/types/assignments.js";
-
 import gemini from "@/config/gemini.js";
 import { assignmentAiSchema } from "@/models/ai-schema.js";
 
@@ -9,236 +6,184 @@ interface PdfFileMeta {
   text: string;
 }
 
-type QuestionType = "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER";
-type CognitiveLevel = "NB" | "TH" | "VD";
-
-interface QuestionGroup {
-  type: QuestionType;
-  count: number;
-  difficulty: CognitiveLevel;
-}
-
 interface GenerateFromPdfsParams {
   files: PdfFileMeta[];
-  title?: string | undefined;
-  description?: string | undefined;
-  subject?: string | undefined;
-  classLevel?: string | undefined;
-  durationMinutes?: number | undefined;
-  questionGroups: QuestionGroup[];
-  extraRequirements?: string | undefined;
-  gradeId?: number | undefined;
+  title?: string;
+  description?: string;
+  subject?: string;
+  classLevel?: string;
+  durationMinutes?: number;
+  extraRequirements?: string;
 }
 
 function buildPrompt(params: GenerateFromPdfsParams): string {
-  const { files, title, description, subject, classLevel, durationMinutes, questionGroups, extraRequirements } = params;
+  const {
+    files,
+    title,
+    description,
+    subject,
+    classLevel,
+    durationMinutes,
+    extraRequirements,
+  } = params;
 
   const sourceDocuments = files
-    .map((file, index) => `
+    .map(
+      (file, index) => `
 ========================
 SOURCE DOCUMENT ${index + 1}
 Filename: ${file.originalname}
 ========================
 
 ${file.text}
-
-`)
-    .join("\n");
-
-  const totalQuestions = questionGroups.reduce((sum, g) => sum + g.count, 0);
-  const matrixSummary = questionGroups
-    .map((g, i) => `- Nhóm ${i + 1}: ${g.count} câu | ${g.type} | mức độ ${g.difficulty}`)
+`
+    )
     .join("\n");
 
   return `
-Bạn là AI chuyên tạo bài tập giáo dục.
+Bạn là AI chuyên phân tích đề kiểm tra và tạo đề kiểm tra mới.
 
-Nhiệm vụ của bạn là tạo MỘT BÀI TẬP MỚI dựa DUY NHẤT vào nội dung tài liệu PDF cung cấp bên dưới.
+NHIỆM VỤ:
+
+Dựa DUY NHẤT vào nội dung các đề/tài liệu PDF được cung cấp bên dưới,
+hãy:
+
+1. Phân tích cấu trúc của đề gốc.
+2. Xác định số lượng câu hỏi.
+3. Xác định loại câu hỏi của từng câu.
+4. Xác định cách phân bố các loại câu hỏi.
+5. Xác định mức độ nhận thức của các câu hỏi:
+   - NB: Nhận biết
+   - TH: Thông hiểu
+   - VD: Vận dụng
+6. Xác định các chủ đề/nội dung kiến thức được kiểm tra.
+7. Xác định cách xây dựng câu hỏi và phương án trả lời.
+8. Sau khi phân tích, hãy tạo MỘT ĐỀ MỚI có cấu trúc tương tự đề gốc.
 
 ========================
-THÔNG TIN BÀI TẬP
+THÔNG TIN BỔ SUNG
 ========================
 
-Tiêu đề:
-${title || "Auto-generated assignment from PDF"}
+Tiêu đề mong muốn:
+${title || "Đề kiểm tra mới"}
 
 Mô tả:
-${description || "Assignment generated from imported PDF documents"}
+${description || "Đề kiểm tra được tạo dựa trên đề mẫu"}
 
 Lớp:
-${classLevel || "Not specified"}
+${classLevel || "Hãy suy luận từ đề gốc nếu có thể"}
 
 Môn:
-${subject || "Not specified"}
+${subject || "Hãy xác định từ nội dung đề nếu có thể"}
 
 Thời gian:
-${durationMinutes || 30} phút
+${durationMinutes || "Giữ tương tự đề gốc nếu có thể xác định"}
+
+Yêu cầu thêm của giáo viên:
+${extraRequirements || "Không có"}
 
 ========================
-TÀI LIỆU NGUỒN
+NGUYÊN TẮC TẠO ĐỀ
+========================
+
+1. Giữ cấu trúc tổng thể tương tự đề gốc.
+
+2. Giữ số lượng câu hỏi tương đương với đề gốc.
+
+3. Giữ tỷ lệ/phân bố các loại câu hỏi tương tự đề gốc.
+
+4. Giữ phân bố mức độ nhận thức tương tự đề gốc.
+
+5. Các câu hỏi mới phải kiểm tra những kiến thức/chủ đề tương ứng
+   với đề gốc.
+
+6. Không sao chép nguyên văn câu hỏi từ đề gốc.
+
+7. Không sao chép nguyên văn các phương án trả lời từ đề gốc.
+
+8. Nội dung câu hỏi mới phải phù hợp với kiến thức trong tài liệu nguồn.
+
+9. Mỗi câu hỏi phải có đúng một cognitive_level:
+   - NB
+   - TH
+   - VD
+
+10. SINGLE_CHOICE:
+    - Có ít nhất 2 phương án.
+    - Chỉ có đúng 1 phương án isCorrect = true.
+
+11. MULTIPLE_CHOICE:
+    - Có ít nhất 2 phương án.
+    - Có ít nhất 1 phương án isCorrect = true.
+
+12. TRUE_FALSE:
+    - Chỉ có 2 phương án:
+      "Đúng" và "Sai".
+    - answer phải là "true" hoặc "false".
+
+13. SHORT_ANSWER:
+    - answers phải là [].
+    - answer phải chứa đáp án ngắn.
+
+14. Đảm bảo đáp án phù hợp với nội dung câu hỏi.
+
+15. Không tạo câu hỏi dựa trên kiến thức không xuất hiện
+    trong tài liệu nguồn nếu không cần thiết.
+
+16. Không thêm thông tin không có căn cứ từ đề/tài liệu nguồn.
+
+========================
+ĐỊNH DẠNG OUTPUT
+========================
+
+Chỉ trả về JSON.
+
+Không trả về Markdown.
+
+Không sử dụng code block.
+
+Không giải thích.
+
+Không thêm bất kỳ field nào ngoài những field được định nghĩa
+trong response schema.
+
+========================
+ĐỀ/TÀI LIỆU NGUỒN
 ========================
 
 ${sourceDocuments}
 
 ========================
-MA TRẬN CÂU HỎI
+BẮT ĐẦU TẠO ĐỀ
 ========================
-
-Tổng số câu: ${totalQuestions}
-
-Các nhóm:
-${matrixSummary}
-
-Yêu cầu thêm của giáo viên:
-${extraRequirements || "None"}
-
-========================
-QUY TẮC BẮT BUỘC
-========================
-
-1. Tạo đúng ${totalQuestions} câu hỏi.
-2. Câu hỏi phải bám sát nội dung tài liệu nguồn, không dùng kiến thức ngoài.
-3. Mỗi câu phải có đúng 1 mức độ nhận thức trong 3 mức: NB, TH, VD.
-4. Tổng thể phải bám theo ma trận đã nêu.
-5. Với SINGLE_CHOICE: đúng 1 đáp án đúng.
-6. Với MULTIPLE_CHOICE: ít nhất 1 đáp án đúng.
-7. Với TRUE_FALSE: chỉ có 2 lựa chọn Đúng/Sai và answer phải là true/false.
-8. Với SHORT_ANSWER: answers phải rỗng, answer là đáp án ngắn.
-9. Không sinh lại nguyên văn nội dung PDF.
-10. Trả về chỉ JSON, không markdown, không giải thích.
-11. Mỗi câu phải có trường cognitive_level với giá trị NB/TH/VD.
-12. Không thêm field nào ngoài schema.
-
-Hãy tạo bài tập ngay.
 `;
 }
 
-async function findLessonIds(gradeId: number | undefined, subjectName: string | undefined): Promise<number[]> {
-  if (!gradeId) return [];
-
-  const result = await pool.query(
-    `
-      SELECT l.id
-      FROM "Lessons" l
-      WHERE l.grade_id = $1
-        ${subjectName ? `AND l.subject_id = (SELECT s.id FROM "Subjects" s WHERE s.subject = $2 )` : ""}
-      ORDER BY l.id
-    `,
-    subjectName ? [gradeId, subjectName] : [gradeId],
-  );
-
-  return result.rows.map((row) => Number(row.id));
-}
-
-function normalizeLevel(value: unknown): CognitiveLevel {
-  if (value === "NB" || value === "TH" || value === "VD") return value;
-  return "TH";
-}
-
-function validateAssignmentRequest(data: unknown, lessonIds: number[], expectedLevelCounts: Record<CognitiveLevel, number>): AssignmentRequest {
-  if (!data || typeof data !== "object") {
-    throw new Error("AI response is not a valid object");
+function parseAiResponse(responseText: string) {
+  try {
+    return JSON.parse(responseText);
+  } catch {
+    throw new Error("Gemini returned invalid JSON");
   }
-
-  const obj = data as Record<string, unknown>;
-
-  if (typeof obj.title !== "string" || !obj.title.trim()) throw new Error("AI response missing valid title");
-  if (typeof obj.description !== "string") throw new Error("AI response missing valid description");
-  if (typeof obj.class_level !== "string") throw new Error("AI response missing valid class_level");
-  if (typeof obj.duration_minutes !== "number" || obj.duration_minutes <= 0) throw new Error("AI response missing valid duration_minutes");
-  if (typeof obj.subject !== "string") throw new Error("AI response missing valid subject");
-  if (!Array.isArray(obj.questions) || obj.questions.length === 0) throw new Error("AI response missing valid questions array");
-
-  const validTypes = ["SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
-  const seenLevels: Record<CognitiveLevel, number> = { NB: 0, TH: 0, VD: 0 };
-
-  for (let i = 0; i < obj.questions.length; i++) {
-    const q = obj.questions[i] as Record<string, unknown>;
-    if (typeof q.content !== "string" || !q.content.trim()) throw new Error(`Question ${i + 1} missing valid content`);
-
-    const qType = (q.type ?? q.question_type) as string;
-    if (!validTypes.includes(qType)) throw new Error(`Question ${i + 1} has invalid question_type: ${qType}`);
-
-    const level = normalizeLevel(q.cognitive_level);
-    seenLevels[level] += 1;
-
-    if (qType === "SHORT_ANSWER") {
-      if (typeof q.answer !== "string" || !q.answer.trim()) throw new Error(`Question ${i + 1} (SHORT_ANSWER) must have answer`);
-    } else if (qType === "TRUE_FALSE") {
-      if (typeof q.answer !== "string" || (q.answer !== "true" && q.answer !== "false")) {
-        if (!Array.isArray(q.answers) || q.answers.length < 2) {
-          throw new Error(`Question ${i + 1} (TRUE_FALSE) must have answer or 2 options`);
-        }
-      }
-    } else {
-      if (!Array.isArray(q.answers) || q.answers.length < 2) throw new Error(`Question ${i + 1} must have at least 2 answers`);
-      const hasCorrect = q.answers.some((a: unknown) => typeof a === "object" && a !== null && (a as Record<string, unknown>).isCorrect === true);
-      if (!hasCorrect) throw new Error(`Question ${i + 1} has no correct answer`);
-    }
-  }
-
-  for (const level of ["NB", "TH", "VD"] as CognitiveLevel[]) {
-    if (expectedLevelCounts[level] > 0 && seenLevels[level] === 0) {
-      throw new Error(`AI response is missing questions for cognitive level ${level}`);
-    }
-  }
-
-  return {
-    title: obj.title as string,
-    description: obj.description as string,
-    class_level: obj.class_level as string,
-    duration_minutes: obj.duration_minutes as number,
-    subject: obj.subject as string,
-    lessonIds: lessonIds,
-    questions: (obj.questions as Array<Record<string, unknown>>).map((q) => {
-      const qType = (q.type ?? q.question_type) as QuestionType;
-      const answers = qType === "SHORT_ANSWER"
-        ? []
-        : (q.answers as Array<Record<string, unknown>>).map((a) => ({
-            content: a.content as string,
-            isCorrect: Boolean(a.isCorrect),
-          }));
-
-      if (qType === "SHORT_ANSWER") {
-        return {
-          content: q.content as string,
-          question_type: qType,
-          cognitive_level: normalizeLevel(q.cognitive_level),
-          answer: typeof q.answer === "string" ? q.answer : "",
-          answers,
-        };
-      }
-
-      const question: any = {
-        content: q.content as string,
-        question_type: qType,
-        cognitive_level: normalizeLevel(q.cognitive_level),
-        answers,
-      };
-
-      if (typeof q.answer === "string") {
-        question.answer = q.answer;
-      }
-
-      return question;
-    }),
-  };
 }
 
 const PdfImportService = {
-  generateFromPdfs: async (params: GenerateFromPdfsParams): Promise<AssignmentRequest> => {
+  generateFromPdfs: async (params: GenerateFromPdfsParams) => {
     try {
-      if (!params.files || params.files.length === 0) throw new Error("No PDF files provided");
-      if (!params.questionGroups || params.questionGroups.length === 0) throw new Error("No question groups provided");
+      if (!params.files || params.files.length === 0) {
+        throw new Error("No PDF files provided");
+      }
 
       for (const file of params.files) {
         if (!file.text || !file.text.trim()) {
-          throw new Error(`File "${file.originalname}" has no extractable text layer. Please ensure the PDF is not a scanned image.`);
+          throw new Error(
+            `File "${file.originalname}" has no extractable text`
+          );
         }
       }
 
-      const lessonIds = await findLessonIds(params.gradeId, params.subject);
       const prompt = buildPrompt(params);
+
       const response = await gemini.models.generateContent({
         model: "gemini-3.6-flash",
         contents: prompt,
@@ -248,19 +193,11 @@ const PdfImportService = {
         },
       });
 
-      if (!response.text) throw new Error("Gemini returned an empty response");
-
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(response.text);
-      } catch {
-        throw new Error("Gemini returned invalid JSON");
+      if (!response.text) {
+        throw new Error("Gemini returned an empty response");
       }
 
-      const expectedLevelCounts: Record<CognitiveLevel, number> = { NB: 0, TH: 0, VD: 0 };
-      for (const g of params.questionGroups) expectedLevelCounts[g.difficulty] += g.count;
-
-      return validateAssignmentRequest(parsed, lessonIds, expectedLevelCounts);
+      return parseAiResponse(response.text);
     } catch (error) {
       console.error("PDF Import Service error:", error);
       throw error;

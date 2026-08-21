@@ -81,10 +81,9 @@ function MainApp() {
       <ImportPdfModal
         isOpen={isPdfModalOpen}
         onClose={() => setIsPdfModalOpen(false)}
-        onSuccess={(assignment: AssignmentRequest) => {
-          setImportedAssignment(assignment);
+        onSuccess={() => {
+          setRefreshTrigger((prev) => prev + 1);
           setIsPdfModalOpen(false);
-          setIsCreateModalOpen(true);
         }}
       />
 

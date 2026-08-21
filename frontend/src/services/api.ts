@@ -160,7 +160,7 @@ export const api = {
   // PDF Import → AI Generate
   importPdfsAndGenerate: async (
     files: File[],
-    options: {
+    options?: {
       title?: string;
       description?: string;
       subject?: string;
@@ -179,16 +179,18 @@ export const api = {
     for (const file of files) {
       formData.append("pdfs", file);
     }
-    if (options.title) formData.append("title", options.title);
-    if (options.description) formData.append("description", options.description);
-    if (options.subject) formData.append("subject", options.subject);
-    if (options.class_level) formData.append("class_level", options.class_level);
-    if (options.grade_id) formData.append("grade_id", String(options.grade_id));
-    if (options.duration_minutes) formData.append("duration_minutes", String(options.duration_minutes));
-    if (options.question_groups) {
-      formData.append("question_groups", JSON.stringify(options.question_groups));
+    if (options) {
+      if (options.title) formData.append("title", options.title);
+      if (options.description) formData.append("description", options.description);
+      if (options.subject) formData.append("subject", options.subject);
+      if (options.class_level) formData.append("class_level", options.class_level);
+      if (options.grade_id) formData.append("grade_id", String(options.grade_id));
+      if (options.duration_minutes) formData.append("duration_minutes", String(options.duration_minutes));
+      if (options.question_groups) {
+        formData.append("question_groups", JSON.stringify(options.question_groups));
+      }
+      if (options.extra_requirements) formData.append("extra_requirements", options.extra_requirements);
     }
-    if (options.extra_requirements) formData.append("extra_requirements", options.extra_requirements);
 
     const res = await fetch(`${API_BASE_URL}/pdf/import`, {
       method: "POST",
