@@ -98,10 +98,13 @@ const AssignmentController = {
   update: async (req: Request, res: Response) => { // Cập nhật bài tập dc AI tạo
     try {
       const assignmentId = Number(req.params.id);
+      if (isNaN(assignmentId)) {
+        return res.status(400).json({ message: "Invalid assignment ID" });
+      }
       if (!req.user) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-      const teacherId = req.user.id; // sau sẽ lấy từ request
+      const teacherId = req.user.id;
 
       const assignment: AssignmentUpdateRequest = req.body;
 
@@ -114,11 +117,16 @@ const AssignmentController = {
       return res.status(200).json({
         message: "Assignment updated successfully",
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Update assignment error:", error);
+      const errMsg = (error as Error).message || "";
+      if (errMsg.includes("not found") || errMsg.includes("permission")) {
+        return res.status(404).json({ message: errMsg });
+      }
 
       return res.status(500).json({
         message: "Failed to update assignment",
+        error: errMsg,
       });
     }
   },

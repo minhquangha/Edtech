@@ -56,26 +56,26 @@ export interface AnswerRequest {
 }
 
 export interface AssignmentUpdateRequest {
-  title: string;
-  description: string;
-  class_level: string;
-  duration_minutes: number;
-  subject: string;
-  questions: QuestionUpdateRequest[];
-  
+  title?: string;
+  description?: string;
+  class_level?: string;
+  duration_minutes?: number;
+  subject?: string;
+  lessonIds?: number[];
+  questions?: QuestionUpdateRequest[];
 }
 
 export interface QuestionUpdateRequest {
-  id: number;
+  id?: number;
   content: string;
   question_type: QuestionType;
-  answers: AnswerUpdateRequest[];
+  answers?: AnswerUpdateRequest[];
   answer?: string;
   cognitive_level?: CognitiveLevel;
 }
 
 export interface AnswerUpdateRequest {
-  id: number;
+  id?: number;
   content: string;
   isCorrect: boolean;
 }

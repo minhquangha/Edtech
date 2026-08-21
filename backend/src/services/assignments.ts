@@ -18,7 +18,7 @@ const AssignmentService = {
       await client.query("BEGIN");
 
       // 1. Tạo Assignment
-      const assignmentQuery = `
+      const assignmentQuery = ` 
         INSERT INTO "Assignment" (
           title,
           description,
@@ -295,241 +295,243 @@ const AssignmentService = {
       }
 
       // =====================================================
-      // 2. Update thông tin Assignment
+      // 2. Update thông tin Assignment (chỉ update các cột có trong bảng "Assignment")
       // =====================================================
 
-      await client.query(
-        `
-        UPDATE "Assignment"
-        SET
-          title = $1,
-          description = $2,
-          class_level = $3,
-          duration_minutes = $4,
-          subject = $5
-        WHERE id = $6
-        `,
-        [
-          assignment.title,
-          assignment.description,
-          assignment.class_level,
-          assignment.duration_minutes,
-          assignment.subject,
-          assignmentId,
-        ],
-      );
+      const updateFields: string[] = [];
+      const updateParams: (string | number | null)[] = [];
+      let paramIdx = 1;
 
-      // =====================================================
-      // 3. Lấy danh sách Question hiện tại của Assignment
-      // =====================================================
+      if (assignment.title !== undefined) {
+        updateFields.push(`title = $${paramIdx++}`);
+        updateParams.push(assignment.title);
+      }
+      if (assignment.description !== undefined) {
+        updateFields.push(`description = $${paramIdx++}`);
+        updateParams.push(assignment.description);
+      }
+      if (assignment.duration_minutes !== undefined) {
+        updateFields.push(`duration_minutes = $${paramIdx++}`);
+        updateParams.push(assignment.duration_minutes);
+      }
 
-      const oldQuestionsResult = await client.query(
-        `
-        SELECT question_id
-        FROM "Assignment_Question"
-        WHERE assignment_id = $1
-        `,
-        [assignmentId],
-      );
+      updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
 
-      const oldQuestionIds: number[] = oldQuestionsResult.rows.map((row) =>
-        Number(row.question_id),
-      );
-
-      // Danh sách question ID frontend gửi lên
-      const requestQuestionIds: number[] = assignment.questions.map(
-        (question) => question.id,
-      );
-
-      // =====================================================
-      // 4. Xử lý từng Question
-      // =====================================================
-
-      for (const question of assignment.questions) {
-        // ---------------------------------------------------
-        // Kiểm tra Question có thực sự thuộc Assignment này
-        // ---------------------------------------------------
-
-        const questionCheck = await client.query(
-          `
-          SELECT q.id
-          FROM "Question" q
-          INNER JOIN "Assignment_Question" aq
-            ON aq.question_id = q.id
-          WHERE q.id = $1
-            AND aq.assignment_id = $2
-          `,
-          [question.id, assignmentId],
-        );
-
-        if (questionCheck.rows.length === 0) {
-          throw new Error(
-            `Question ${question.id} does not belong to assignment ${assignmentId}`,
-          );
-        }
-
-        // ---------------------------------------------------
-        // Update Question
-        // ---------------------------------------------------
-
+      if (updateFields.length > 1) {
+        updateParams.push(assignmentId);
         await client.query(
           `
-          UPDATE "Question"
-          SET
-            content = $1,
-            question_type = $2
-          WHERE id = $3
+          UPDATE "Assignment"
+          SET ${updateFields.join(", ")}
+          WHERE id = $${paramIdx}
           `,
-          [question.content, question.question_type, question.id],
+          updateParams,
         );
+      }
 
-        // ===================================================
-        // Lấy danh sách Answer hiện tại của Question
-        // ===================================================
-
-        const oldAnswersResult = await client.query(
+      // Sync Lesson_Assignment if lessonIds is supplied
+      if (Array.isArray(assignment.lessonIds) && assignment.lessonIds.length > 0) {
+        await client.query(
+          `DELETE FROM "Lesson_Assignment" WHERE assignment_id = $1`,
+          [assignmentId],
+        );
+        await client.query(
           `
-          SELECT id
-          FROM "Question_Options"
-          WHERE question_id = $1
+          INSERT INTO "Lesson_Assignment" (assignment_id, lesson_id)
+          SELECT $1, unnest($2::int[])
           `,
-          [question.id],
+          [assignmentId, assignment.lessonIds],
         );
-
-        const oldAnswerIds: number[] = oldAnswersResult.rows.map((row) =>
-          Number(row.id),
-        );
-
-        const requestAnswerIds: number[] = question.answers.map(
-          (answer) => answer.id,
-        );
-
-        // ===================================================
-        // Update Answer
-        // ===================================================
-
-        for (const answer of question.answers) {
-          const answerResult = await client.query(
-            `
-            UPDATE "Question_Options"
-            SET
-              content = $1,
-              is_correct = $2
-            WHERE id = $3
-              AND question_id = $4
-            `,
-            [answer.content, answer.isCorrect, answer.id, question.id],
-          );
-
-          if (answerResult.rowCount === 0) {
-            throw new Error(
-              `Answer ${answer.id} does not belong to question ${question.id}`,
-            );
-          }
-        }
-
-        // ===================================================
-        // Xóa Answer bị giáo viên xóa khỏi frontend
-        // ===================================================
-
-        const answersToDelete = oldAnswerIds.filter(
-          (id) => !requestAnswerIds.includes(id),
-        );
-
-        if (answersToDelete.length > 0) {
-          await client.query(
-            `
-            DELETE FROM "Question_Options"
-            WHERE id = ANY($1::int[])
-              AND question_id = $2
-            `,
-            [answersToDelete, question.id],
-          );
-        }
       }
 
       // =====================================================
-      // 5. Xử lý Question bị giáo viên xóa
+      // 3. Xử lý danh sách Questions & Options nếu được truyền vào
       // =====================================================
 
-      const questionsToDelete = oldQuestionIds.filter(
-        (id) => !requestQuestionIds.includes(id),
-      );
-
-      for (const questionId of questionsToDelete) {
-        // -----------------------------------------------
-        // Xóa Answer
-        // -----------------------------------------------
-
-        await client.query(
+      if (Array.isArray(assignment.questions)) {
+        const oldQuestionsResult = await client.query(
           `
-          DELETE FROM "Question_Options"
-          WHERE question_id = $1
-          `,
-          [questionId],
-        );
-
-        // -----------------------------------------------
-        // Xóa quan hệ AssignmentQuestion
-        // -----------------------------------------------
-
-        await client.query(
-          `
-          DELETE FROM "Assignment_Question"
+          SELECT question_id
+          FROM "Assignment_Question"
           WHERE assignment_id = $1
-            AND question_id = $2
           `,
-          [assignmentId, questionId],
+          [assignmentId],
         );
 
-        // -----------------------------------------------
-        // Kiểm tra Question còn được Assignment khác dùng
-        // không
-        // -----------------------------------------------
+        const oldQuestionIds: number[] = oldQuestionsResult.rows.map((row) =>
+          Number(row.question_id),
+        );
 
-        const questionUsageResult = await client.query(
-          `
+        const requestQuestionIds: number[] = [];
+
+        for (const question of assignment.questions) {
+          let currentQuestionId: number;
+
+          if (question.id && oldQuestionIds.includes(question.id)) {
+            // Câu hỏi đã tồn tại -> Update Question
+            currentQuestionId = question.id;
+            requestQuestionIds.push(currentQuestionId);
+
+            await client.query(
+              `
+              UPDATE "Question"
+              SET
+                content = $1,
+                question_type = $2,
+                answer = $3,
+                updated_at = CURRENT_TIMESTAMP
+              WHERE id = $4
+              `,
+              [
+                question.content,
+                question.question_type,
+                question.answer || null,
+                currentQuestionId,
+              ],
+            );
+          } else {
+            // Câu hỏi mới -> Insert Question & Assignment_Question
+            const newQuestionResult = await client.query(
+              `
+              INSERT INTO "Question" (content, question_type, answer)
+              VALUES ($1, $2, $3)
+              RETURNING id;
+              `,
+              [
+                question.content,
+                question.question_type,
+                question.answer || null,
+              ],
+            );
+
+            currentQuestionId = newQuestionResult.rows[0].id;
+            requestQuestionIds.push(currentQuestionId);
+
+            await client.query(
+              `
+              INSERT INTO "Assignment_Question" (assignment_id, question_id)
+              VALUES ($1, $2);
+              `,
+              [assignmentId, currentQuestionId],
+            );
+          }
+
+          // Xử lý các phương án đáp án (Question_Options)
+          if (Array.isArray(question.answers)) {
+            const oldOptionsResult = await client.query(
+              `
+              SELECT id
+              FROM "Question_Options"
+              WHERE question_id = $1
+              `,
+              [currentQuestionId],
+            );
+
+            const oldOptionIds: number[] = oldOptionsResult.rows.map((row) =>
+              Number(row.id),
+            );
+
+            const requestOptionIds: number[] = [];
+
+            for (const option of question.answers) {
+              if (option.id && oldOptionIds.includes(option.id)) {
+                // Update option hiện có
+                requestOptionIds.push(option.id);
+                await client.query(
+                  `
+                  UPDATE "Question_Options"
+                  SET
+                    content = $1,
+                    is_correct = $2,
+                    updated_at = CURRENT_TIMESTAMP
+                  WHERE id = $3
+                    AND question_id = $4
+                  `,
+                  [option.content, option.isCorrect, option.id, currentQuestionId],
+                );
+              } else {
+                // Insert option mới
+                const newOptResult = await client.query(
+                  `
+                  INSERT INTO "Question_Options" (question_id, content, is_correct)
+                  VALUES ($1, $2, $3)
+                  RETURNING id;
+                  `,
+                  [currentQuestionId, option.content, option.isCorrect],
+                );
+                requestOptionIds.push(newOptResult.rows[0].id);
+              }
+            }
+
+            // Xóa các option không còn trong request
+            const optionsToDelete = oldOptionIds.filter(
+              (id) => !requestOptionIds.includes(id),
+            );
+
+            if (optionsToDelete.length > 0) {
+              await client.query(
+                `
+                DELETE FROM "Question_Options"
+                WHERE id = ANY($1::int[])
+                  AND question_id = $2
+                `,
+                [optionsToDelete, currentQuestionId],
+              );
+            }
+          }
+        }
+
+        // Xóa các câu hỏi không còn trong request
+        const questionsToDelete = oldQuestionIds.filter(
+          (id) => !requestQuestionIds.includes(id),
+        );
+
+        for (const questionId of questionsToDelete) {
+          await client.query(
+            `
+            DELETE FROM "Question_Options"
+            WHERE question_id = $1
+            `,
+            [questionId],
+          );
+
+          await client.query(
+            `
+            DELETE FROM "Assignment_Question"
+            WHERE assignment_id = $1
+              AND question_id = $2
+            `,
+            [assignmentId, questionId],
+          );
+
+          const questionUsageResult = await client.query(
+            `
             SELECT 1
             FROM "Assignment_Question"
             WHERE question_id = $1
             LIMIT 1
             `,
-          [questionId],
-        );
-
-        // Nếu không còn Assignment nào sử dụng
-        // thì mới xóa Question
-        if (questionUsageResult.rows.length === 0) {
-          await client.query(
-            `
-            DELETE FROM "Question"
-            WHERE id = $1
-            `,
             [questionId],
           );
+
+          if (questionUsageResult.rows.length === 0) {
+            await client.query(
+              `
+              DELETE FROM "Question"
+              WHERE id = $1
+              `,
+              [questionId],
+            );
+          }
         }
       }
 
-      // =====================================================
-      // 6. Commit transaction
-      // =====================================================
-
       await client.query("COMMIT");
     } catch (error) {
-      // =====================================================
-      // Có lỗi -> rollback toàn bộ
-      // =====================================================
-
       await client.query("ROLLBACK");
-
       console.error("Update assignment error:", error);
-
       throw error;
     } finally {
-      // =====================================================
-      // Trả connection về pool
-      // =====================================================
-
       client.release();
     }
   },
