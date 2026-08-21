@@ -1,3 +1,5 @@
+export type CognitiveLevel = "NB" | "TH" | "VD";
+export type QuestionType = "MULTIPLE_CHOICE" | "SINGLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER";
 export interface Question {
   id: number;
   assignmentId: number;
@@ -58,6 +60,7 @@ export interface AssignmentUpdateRequest {
   duration_minutes: number;
   subject: string;
   questions: QuestionUpdateRequest[];
+  
 }
 
 export interface QuestionUpdateRequest {
@@ -65,6 +68,7 @@ export interface QuestionUpdateRequest {
   content: string;
   question_type: "MULTIPLE_CHOICE" | "SINGLE_CHOICE"|"TRUE_FALSE"|"SHORT_ANSWER";
   answers: AnswerUpdateRequest[];
+   cognitive_level?: CognitiveLevel;
 }
 
 export interface AnswerUpdateRequest {
