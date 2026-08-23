@@ -68,7 +68,7 @@ export interface AssignmentRequest {
   class_level: string;
   duration_minutes: number;
   subject: string;
-  lessonIds: number[];
+  lessonIds?: number[];
   questions: QuestionRequest[];
 }
 

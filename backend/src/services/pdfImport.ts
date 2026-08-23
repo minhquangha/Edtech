@@ -88,11 +88,11 @@ NGUYÊN TẮC TẠO ĐỀ
 
 1. Giữ cấu trúc tổng thể tương tự đề gốc.
 
-2. Giữ số lượng câu hỏi tương đương với đề gốc.
+2. Giữ chính xác số lượng câu hỏi tương đương với đề gốc.
 
-3. Giữ tỷ lệ/phân bố các loại câu hỏi tương tự đề gốc.
+3. Giữ chính xác tỷ lệ/phân bố các loại câu hỏi tương tự đề gốc.
 
-4. Giữ phân bố mức độ nhận thức tương tự đề gốc.
+4. Giữ chính xác phân bố mức độ nhận thức tương tự đề gốc.
 
 5. Các câu hỏi mới phải kiểm tra những kiến thức/chủ đề tương ứng
    với đề gốc.

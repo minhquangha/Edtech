@@ -18,7 +18,7 @@ export const AssignmentRepository = {
           duration_minutes: assignmentReq.duration_minutes,
           teacher_id: teacherId,
           lessonAssignments: {
-            create: assignmentReq.lessonIds.map((lessonId: number) => ({
+            create: (assignmentReq.lessonIds || []).map((lessonId: number) => ({
               lesson_id: lessonId,
             })),
           },
@@ -28,7 +28,7 @@ export const AssignmentRepository = {
       const assignmentId = createdAssignment.id;
       const createdQuestions = [];
 
-      for (const questionReq of assignmentReq.questions) {
+      for (const questionReq of assignmentReq.questions || []) {
         const createdQuestion = await tx.question.create({
           data: {
             content: questionReq.content,
@@ -64,7 +64,7 @@ export const AssignmentRepository = {
         assignment: createdAssignment,
         questions: createdQuestions,
       };
-    });
+    }, { maxWait: 10000, timeout: 60000 });
   },
 
   findByIdWithDetails: async (assignmentId: number) => {
@@ -276,7 +276,7 @@ export const AssignmentRepository = {
           }
         }
       }
-    });
+    }, { maxWait: 10000, timeout: 60000 });
   },
 
   deleteWithRelations: async (assignmentId: number, teacherId: number) => {
@@ -320,7 +320,7 @@ export const AssignmentRepository = {
       await tx.assignment.delete({
         where: { id: assignmentId },
       });
-    });
+    }, { maxWait: 10000, timeout: 60000 });
   },
 };
 
