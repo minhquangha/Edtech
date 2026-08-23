@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id          Int          @id @default(autoincrement())
+  username    String       @unique
+  password    String
+  role        String       @default("user")
+  created_at  DateTime     @default(now()) @map("created_at")
+  updated_at  DateTime     @default(now()) @updatedAt @map("updated_at")
+  assignments Assignment[]
+
+  @@map("User")
+}
+
+model Grade {
+  id      Int      @id @default(autoincrement())
+  grade   Int      @unique
+  lessons Lesson[]
+
+  @@map("Grades")
+}
+
+model Subject {
+  id      Int      @id @default(autoincrement())
+  subject String   @unique
+  lessons Lesson[]
+
+  @@map("Subjects")
+}
+
+model Lesson {
+  id                Int                @id @default(autoincrement())
+  content           String
+  title             String
+  lesson_number     Int
+  subject_id        Int
+  grade_id          Int
+  subject           Subject            @relation(fields: [subject_id], references: [id])
+  grade             Grade              @relation(fields: [grade_id], references: [id])
+  lessonAssignments LessonAssignment[]
+
+  @@unique([subject_id, grade_id, lesson_number])
+  @@map("Lessons")
+}
+
+model Assignment {
+  id                  Int                  @id @default(autoincrement())
+  title               String
+  description         String?
+  duration_minutes    Int
+  teacher_id          Int
+  created_at          DateTime             @default(now()) @map("created_at")
+  updated_at          DateTime             @default(now()) @updatedAt @map("updated_at")
+  teacher             User                 @relation(fields: [teacher_id], references: [id])
+  lessonAssignments   LessonAssignment[]
+  assignmentQuestions AssignmentQuestion[]
+
+  @@map("Assignment")
+}
+
+model LessonAssignment {
+  assignment_id Int
+  lesson_id     Int
+  assignment    Assignment @relation(fields: [assignment_id], references: [id], onDelete: Cascade)
+  lesson        Lesson     @relation(fields: [lesson_id], references: [id], onDelete: Cascade)
+
+  @@id([assignment_id, lesson_id])
+  @@map("Lesson_Assignment")
+}
+
+model Question {
+  id                  Int                  @id @default(autoincrement())
+  content             String
+  question_type       String
+  answer              String?
+  created_at          DateTime             @default(now()) @map("created_at")
+  updated_at          DateTime             @default(now()) @updatedAt @map("updated_at")
+  assignmentQuestions AssignmentQuestion[]
+  options             QuestionOption[]
+
+  @@map("Question")
+}
+
+model AssignmentQuestion {
+  assignment_id Int
+  question_id   Int
+  assignment    Assignment @relation(fields: [assignment_id], references: [id], onDelete: Cascade)
+  question      Question   @relation(fields: [question_id], references: [id], onDelete: Cascade)
+
+  @@id([assignment_id, question_id])
+  @@map("Assignment_Question")
+}
+
+model QuestionOption {
+  id          Int      @id @default(autoincrement())
+  question_id Int
+  content     String
+  is_correct  Boolean
+  created_at  DateTime @default(now()) @map("created_at")
+  updated_at  DateTime @default(now()) @updatedAt @map("updated_at")
+  question    Question @relation(fields: [question_id], references: [id], onDelete: Cascade)
+
+  @@map("Question_Options")
+}

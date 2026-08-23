@@ -1,9 +1,37 @@
 import type { AiRequest } from "@/types/ai-service.js";
-import type { AssignmentRequest, CognitiveLevel } from "@/types/assignments.js";
+import type { AssignmentRequest, CognitiveLevel, QuestionType } from "@/types/assignments.js";
 
 import gemini from "@/config/gemini.js";
 import { assignmentAiSchema } from "@/models/ai-schema.js";
-import pool from "@/config/db.js";
+import { LessonRepository } from "@/repositories/lesson.repository.js";
+interface GeminiQuestionAnswer {
+  content: string;
+  isCorrect?: boolean;
+}
+
+interface GeminiQuestion {
+  content: string;
+  type: QuestionType;
+  answer?: string;
+  cognitive_level?: string;
+  answers?: GeminiQuestionAnswer[];
+}
+
+interface GeminiAssignmentResponse {
+  title: string;
+  description: string;
+  class_level: string;
+  duration_minutes: number;
+  subject: string;
+  questions?: GeminiQuestion[];
+}
+
+interface LessonItem {
+  id: number;
+  lesson_number: number;
+  title: string;
+  content: string;
+}
 
 const VALID_LEVELS: CognitiveLevel[] = ["NB", "TH", "VD"];
 
@@ -41,26 +69,13 @@ const AiService = {
         throw new Error("At least one lesson must be selected");
       }
 
-      const lessonResult = await pool.query(
-        `
-        SELECT
-          id,
-          lesson_number,
-          title,
-          content
-        FROM "Lessons"
-        WHERE id = ANY($1::int[])
-        ORDER BY lesson_number ASC
-        `,
-        [allLessonIds],
-      );
+      const lessons: LessonItem[] = await LessonRepository.findContentsByIds(allLessonIds);
 
-      const lessons = lessonResult.rows;
       if (lessons.length !== allLessonIds.length) {
-        const existingLessonIds = new Set(lessons.map((lesson) => lesson.id));
+        const existingLessonIds = new Set(lessons.map((lesson: LessonItem) => lesson.id));
 
         const missingLessonIds = allLessonIds.filter(
-          (id) => !existingLessonIds.has(id),
+          (id: number) => !existingLessonIds.has(id),
         );
 
         throw new Error(`Lessons not found: ${missingLessonIds.join(", ")}`);
@@ -70,7 +85,9 @@ const AiService = {
       // 5. Tạo Map để lấy lesson nhanh
       // ==========================================
 
-      const lessonMap = new Map(lessons.map((lesson) => [lesson.id, lesson]));
+      const lessonMap = new Map<number, LessonItem>(
+        lessons.map((lesson: LessonItem) => [lesson.id, lesson]),
+      );
 
       // ==========================================
       // 6. Tính tổng số câu hỏi
@@ -87,7 +104,7 @@ const AiService = {
 
       const questionDistribution = groups
         .map((group, index) => {
-          const groupLessons = group.lessonIds.map((lessonId) => {
+          const groupLessons = group.lessonIds.map((lessonId: number) => {
             const lesson = lessonMap.get(lessonId);
             if (!lesson) {
               throw new Error(`Lesson ${lessonId} not found`);
@@ -173,7 +190,7 @@ Generate the assignment now.
 `;
 
       const response = await gemini.models.generateContent({
-        model: "gemini-3.6-flash",
+        model: process.env.MODEL || "gemini-3.6-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -181,11 +198,13 @@ Generate the assignment now.
         },
       });
 
+      
+
       if (!response.text) {
         throw new Error("Gemini returned an empty response");
       }
 
-      const raw = JSON.parse(response.text) as any;
+      const raw = JSON.parse(response.text) as GeminiAssignmentResponse;
       const normalized: AssignmentRequest = {
         title: raw.title,
         description: raw.description,
@@ -193,17 +212,17 @@ Generate the assignment now.
         duration_minutes: raw.duration_minutes,
         subject: raw.subject,
         lessonIds: allLessonIds,
-        questions: (raw.questions || []).map((q: any) => ({
+        questions: (raw.questions || []).map((q: GeminiQuestion) => ({
           content: q.content,
           question_type: q.type,
-          answer: q.answer,
+          ...(q.answer ? { answer: q.answer } : {}),
           cognitive_level: normalizeLevel(q.cognitive_level),
-          answers: (q.answers || []).map((a: any) => ({
+          answers: (q.answers || []).map((a: GeminiQuestionAnswer) => ({
             content: a.content,
             isCorrect: Boolean(a.isCorrect),
           })),
         })),
-      } as AssignmentRequest;
+      };
 
       return normalized;
     } catch (error) {

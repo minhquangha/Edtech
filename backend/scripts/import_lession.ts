@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import pool from "@/config/db.js";
+import prisma from "@/config/prisma.js";
 
 interface LessonData {
   _id?: {
@@ -16,8 +16,6 @@ interface LessonData {
 const DATA_DIR = path.resolve(process.cwd(), "data");
 
 async function importLessons() {
-  const client = await pool.connect();
-
   try {
     const files = fs
       .readdirSync(DATA_DIR)
@@ -29,8 +27,6 @@ async function importLessons() {
     }
 
     console.log(`Tìm thấy ${files.length} file JSON.`);
-
-    await client.query("BEGIN");
 
     for (const file of files) {
       const filePath = path.join(DATA_DIR, file);
@@ -67,83 +63,54 @@ async function importLessons() {
         }
 
         // 1. Tìm hoặc tạo Grade
-        const gradeResult = await client.query(
-          `
-          INSERT INTO "Grades" (grade)
-          VALUES ($1)
-          ON CONFLICT (grade)
-          DO UPDATE SET grade = EXCLUDED.grade
-          RETURNING id;
-          `,
-          [grade]
-        );
-
-        const gradeId = gradeResult.rows[0].id;
+        const dbGrade = await prisma.grade.upsert({
+          where: { grade },
+          update: {},
+          create: { grade },
+        });
 
         // 2. Tìm hoặc tạo Subject
-        const subjectResult = await client.query(
-          `
-          INSERT INTO "Subjects" (subject)
-          VALUES ($1)
-          ON CONFLICT (subject)
-          DO UPDATE SET subject = EXCLUDED.subject
-          RETURNING id;
-          `,
-          [subject]
-        );
+        const dbSubject = await prisma.subject.upsert({
+          where: { subject },
+          update: {},
+          create: { subject },
+        });
 
-        const subjectId = subjectResult.rows[0].id;
-
-        // 3. Insert Lesson
-        const lessonResult = await client.query(
-          `
-          INSERT INTO "Lessons" (
-            content,
+        // 3. Insert / Update Lesson
+        const dbLesson = await prisma.lesson.upsert({
+          where: {
+            subject_id_grade_id_lesson_number: {
+              subject_id: dbSubject.id,
+              grade_id: dbGrade.id,
+              lesson_number: lessonNumber,
+            },
+          },
+          update: {
             title,
-            lesson_number,
-            subject_id,
-            grade_id
-          )
-          VALUES ($1, $2, $3, $4, $5)
-          ON CONFLICT (
-            subject_id,
-            grade_id,
-            lesson_number
-          )
-          DO UPDATE SET
-            title = EXCLUDED.title,
-            content = EXCLUDED.content
-          RETURNING id;
-          `,
-          [
             content,
+          },
+          create: {
             title,
-            lessonNumber,
-            subjectId,
-            gradeId,
-          ]
-        );
+            content,
+            lesson_number: lessonNumber,
+            subject_id: dbSubject.id,
+            grade_id: dbGrade.id,
+          },
+        });
 
         console.log(
-          `✓ ${subject} - Lớp ${grade} - Bài ${lessonNumber} - Lesson ID: ${lessonResult.rows[0].id}`
+          `✓ ${subject} - Lớp ${grade} - Bài ${lessonNumber} - Lesson ID: ${dbLesson.id}`
         );
       }
     }
-
-    await client.query("COMMIT");
 
     console.log("\n==============================");
     console.log("Import dữ liệu thành công!");
     console.log("==============================");
   } catch (error) {
-    await client.query("ROLLBACK");
-
     console.error("\nImport thất bại!");
     console.error(error);
-
     process.exitCode = 1;
-  } finally {
-    client.release();
   }
 }
 

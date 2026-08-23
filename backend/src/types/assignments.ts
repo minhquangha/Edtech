@@ -1,7 +1,5 @@
-
 export type QuestionType = "MULTIPLE_CHOICE" | "SINGLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER";
 export type CognitiveLevel = "NB" | "TH" | "VD";
-
 
 export interface Question {
   id: number;
@@ -30,6 +28,38 @@ export interface Assignment {
   duration_minutes: number;
   teacher_id: number;
   questions: Question[];
+}
+
+export interface TeacherAssignmentSummary {
+  id: number;
+  title: string;
+  description?: string;
+  duration_minutes: number;
+  teacher_id: number;
+  subject?: string;
+  class_level?: string | number;
+  subject_id?: number;
+  grade_id?: number;
+}
+
+export interface GradeItem {
+  id: number;
+  grade: number;
+}
+
+export interface SubjectItem {
+  id: number;
+  subject: string;
+}
+
+export interface LessonSummaryItem {
+  id: number;
+  lesson_number: number;
+  title: string;
+}
+
+export interface LessonContentItem extends LessonSummaryItem {
+  content: string;
 }
 
 export interface AssignmentRequest {
