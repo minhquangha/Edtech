@@ -10,6 +10,7 @@ import type {
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { PrintablePreview } from "./PrintablePreview";
+import { MathText } from "./MathText";
 
 interface ImportPdfModalProps {
   isOpen: boolean;
@@ -522,7 +523,7 @@ export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({ isOpen, onClose,
                         }}
                       />
                     ) : (
-                      <div className="q-text" style={{ fontSize: "0.95rem", fontWeight: 600 }}>{q.content}</div>
+                      <div className="q-text" style={{ fontSize: "0.95rem", fontWeight: 600 }}><MathText text={q.content} /></div>
                     )}
                   </div>
 
@@ -566,7 +567,7 @@ export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({ isOpen, onClose,
                           ) : (
                             <div className={`answer-detail-item ${ans.isCorrect ? "correct" : ""}`} style={{ flex: 1 }}>
                               <span className="ans-prefix">{String.fromCharCode(65 + aIndex)}.</span>
-                              <span className="ans-content">{ans.content}</span>
+                              <span className="ans-content"><MathText text={ans.content} /></span>
                               {ans.isCorrect && <span className="correct-mark">✓ Đáp án đúng</span>}
                             </div>
                           )}
@@ -589,7 +590,7 @@ export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({ isOpen, onClose,
                   {q.question_type === "SHORT_ANSWER" && (
                     <div className="short-answer-display-box">
                       <span>✓ Đáp án đúng:</span>
-                      <strong>{q.answer || "Chưa có đáp án"}</strong>
+                      <strong><MathText text={q.answer || "Chưa có đáp án"} /></strong>
                     </div>
                   )}
                 </div>

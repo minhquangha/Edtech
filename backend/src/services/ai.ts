@@ -183,8 +183,9 @@ GENERATION RULES
 8. SINGLE_CHOICE and MULTIPLE_CHOICE must have answers.
 9. TRUE_FALSE must have answer as true/false and answers as [].
 10. SHORT_ANSWER must have answer string and answers as [].
-11. Do not include any extra fields.
-12. Return only JSON.
+11. Format all mathematical expressions, chemical formulas, and scientific notations using standard LaTeX syntax (e.g., use \\( ... \\) for inline formulas and \\[ ... \\] for display math equations). Ensure plain text and formulas are cleanly formatted.
+12. Do not include any extra fields.
+13. Return only JSON.
 
 Generate the assignment now.
 `;

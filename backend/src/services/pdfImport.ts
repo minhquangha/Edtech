@@ -132,6 +132,8 @@ NGUYÊN TẮC TẠO ĐỀ
 
 16. Không thêm thông tin không có căn cứ từ đề/tài liệu nguồn.
 
+17. Tất cả các công thức toán học, biểu thức lý/hóa, ký hiệu khoa học trong nội dung câu hỏi và các phương án trả lời phải được viết bằng định dạng LaTeX chuẩn (sử dụng \\( ... \\) cho inline formula và \\[ ... \\] cho display math).
+
 ========================
 ĐỊNH DẠNG OUTPUT
 ========================

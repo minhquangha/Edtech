@@ -3,6 +3,7 @@ import type { Assignment, AssignmentUpdateRequest, QuestionType, Question, Edita
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { PrintablePreview } from "./PrintablePreview";
+import { MathText } from "./MathText";
 
 interface AssignmentDetailModalProps {
   assignment: Assignment | null;
@@ -376,7 +377,7 @@ export const AssignmentDetailModal: React.FC<AssignmentDetailModalProps> = ({
                       <div key={q.id || index} className="question-detail-card">
                         <div className="question-detail-header">
                           <span className="q-number">Câu {index + 1}:</span>
-                          <span className="q-text">{q.content}</span>
+                          <span className="q-text"><MathText text={q.content} /></span>
                           <span className={`q-type-badge ${getQuestionTypeBadgeClass(qType)}`}>
                             {getQuestionTypeLabel(qType)}
                           </span>
@@ -394,7 +395,7 @@ export const AssignmentDetailModal: React.FC<AssignmentDetailModalProps> = ({
                                   <span className="ans-prefix">
                                     {String.fromCharCode(65 + aIdx)}.
                                   </span>
-                                  <span className="ans-content">{ans.content}</span>
+                                  <span className="ans-content"><MathText text={ans.content} /></span>
                                   {ans.isCorrect && <span className="correct-mark">✓ Đáp án đúng</span>}
                                 </div>
                               ))
@@ -420,7 +421,7 @@ export const AssignmentDetailModal: React.FC<AssignmentDetailModalProps> = ({
                         {qType === "SHORT_ANSWER" && (
                           <div className="short-answer-display-box">
                             <span>✓ Đáp án đúng:</span>
-                            <strong>{answerVal || (q.answers && q.answers.length > 0 ? q.answers[0].content : "Chưa có đáp án")}</strong>
+                            <strong><MathText text={answerVal || (q.answers && q.answers.length > 0 ? q.answers[0].content : "Chưa có đáp án")} /></strong>
                           </div>
                         )}
                       </div>

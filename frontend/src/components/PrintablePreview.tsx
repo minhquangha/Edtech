@@ -1,5 +1,6 @@
 import React from "react";
 import type { Assignment, AssignmentRequest, QuestionType } from "../types";
+import { MathText } from "./MathText";
 
 interface PrintablePreviewProps {
   assignment: Assignment | AssignmentRequest | (Omit<Assignment, "id" | "teacher_id"> & { id?: number; teacher_id?: number });
@@ -83,14 +84,14 @@ export const PrintablePreview: React.FC<PrintablePreviewProps> = ({ assignment, 
                         <span className="print-q-number">Câu {qIdx + 1}</span>
                         <span className="print-q-type">({getQuestionTypeShort(qType)}) · {cognitive}</span>
                       </div>
-                      <div className="print-q-content">{q.content}</div>
+                      <div className="print-q-content"><MathText text={q.content} /></div>
 
                       {(qType === "SINGLE_CHOICE" || qType === "MULTIPLE_CHOICE") && (
                         <div className="print-answers">
                           {(q.answers || []).map((ans, aIdx) => (
                             <div key={ans.id || aIdx} className={`print-answer ${showAnswers && ans.isCorrect ? "print-answer-correct" : ""}`}>
                               <span className="print-answer-letter">{String.fromCharCode(65 + aIdx)}</span>
-                              <span className="print-answer-content">{ans.content}</span>
+                              <span className="print-answer-content"><MathText text={ans.content} /></span>
                               {showAnswers && ans.isCorrect && <span className="print-correct-mark">✓</span>}
                             </div>
                           ))}
@@ -117,7 +118,7 @@ export const PrintablePreview: React.FC<PrintablePreviewProps> = ({ assignment, 
                           {showAnswers ? (
                             <div className="print-sa-answer">
                               <span className="print-sa-label">Đáp án:</span>
-                              <strong>{answerVal || "Chưa có"}</strong>
+                              <strong><MathText text={answerVal || "Chưa có"} /></strong>
                             </div>
                           ) : (
                             <div className="print-sa-blank">..............................................................</div>
@@ -169,13 +170,13 @@ export const PrintablePreview: React.FC<PrintablePreviewProps> = ({ assignment, 
             return (
               <div key={q.id || qIdx} style={{ marginBottom: 14 }}>
                 <div style={{ fontWeight: 700, marginBottom: 4 }}>
-                  Câu {qIdx + 1}. {q.content}
+                  Câu {qIdx + 1}. <MathText text={q.content} />
                 </div>
                 {(qType === "SINGLE_CHOICE" || qType === "MULTIPLE_CHOICE") && (
                   <div style={{ paddingLeft: 20 }}>
                     {(q.answers || []).map((ans, aIdx) => (
                       <div key={ans.id || aIdx} style={{ marginBottom: 2, fontSize: "10pt" }}>
-                        <span style={{ fontWeight: 700 }}>{String.fromCharCode(65 + aIdx)}.</span> {ans.content}
+                        <span style={{ fontWeight: 700 }}>{String.fromCharCode(65 + aIdx)}.</span> <MathText text={ans.content} />
                         {showAnswers && ans.isCorrect && <span style={{ fontWeight: 700, color: "#166534" }}> ✓</span>}
                       </div>
                     ))}
@@ -189,7 +190,7 @@ export const PrintablePreview: React.FC<PrintablePreviewProps> = ({ assignment, 
                 )}
                 {qType === "SHORT_ANSWER" && (
                   <div style={{ paddingLeft: 20, fontSize: "10pt" }}>
-                    {showAnswers ? <div><strong>Đáp án:</strong> {answerVal || "Chưa có"}</div> : <div>..............................................................</div>}
+                    {showAnswers ? <div><strong>Đáp án:</strong> <MathText text={answerVal || "Chưa có"} /></div> : <div>..............................................................</div>}
                   </div>
                 )}
               </div>
