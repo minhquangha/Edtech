@@ -1,6 +1,8 @@
 import type { Request, Response } from "express";
+import { pdf } from "pdf-to-img";
 import { PDFParse } from "pdf-parse";
 
+import Tesseract from "tesseract.js";
 import PdfImportService from "@/services/pdfImport.js";
 import type { AssignmentRequest } from "@/types/assignments.js";
 
@@ -10,6 +12,20 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024;
 interface ParsedPdfFile {
   originalname: string;
   text: string;
+}
+
+
+function hasMeaningfulText(text:string) {
+    if (!text) {
+        return false;
+    }
+
+    // Loại bỏ các marker/metadata do PDF parser sinh ra
+    const cleanedText = text
+        .replace(/--\s*\d+\s+of\s+\d+\s*--/gi, "")
+        .trim();
+
+    return cleanedText.length > 0;
 }
 
 async function extractPdfText(buffer: Buffer): Promise<string> {
@@ -37,14 +53,8 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
             return page;
           }
 
-          if (
-            page &&
-            typeof page === "object" &&
-            "text" in page
-          ) {
-            return String(
-              (page as { text: unknown }).text ?? "",
-            );
+          if (page && typeof page === "object" && "text" in page) {
+            return String((page as { text: unknown }).text ?? "");
           }
 
           return "";
@@ -56,9 +66,34 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
   return "";
 }
 
-function validateUploadedFiles(
-  files: Express.Multer.File[],
-): string | null {
+async function extractPdfTextUsingOCR(buffer: Buffer): Promise<string> {
+  const document = await pdf(buffer, {
+    scale: 2,
+  });
+  let fullText = "";
+  let pageNumber = 0;
+  for await (const image of document) {
+    pageNumber++;
+
+    console.log(`\nĐang OCR trang ${pageNumber}...`);
+
+    const result = await Tesseract.recognize(image, "vie");
+
+    const text = result.data.text;
+
+    console.log(`OCR trang ${pageNumber} hoàn thành`);
+
+    fullText += `--- Trang ${pageNumber} ---\n`;
+
+    fullText += text.trim();
+
+    fullText += "\n\n";
+  }
+  document.destroy();
+  return fullText;
+}
+
+function validateUploadedFiles(files: Express.Multer.File[]): string | null {
   if (files.length === 0) {
     return "Vui lòng tải lên ít nhất 1 file PDF";
   }
@@ -83,9 +118,7 @@ function validateUploadedFiles(
 const PdfImportController = {
   import: async (req: Request, res: Response) => {
     try {
-      const files = req.files as
-        | Express.Multer.File[]
-        | undefined;
+      const files = req.files as Express.Multer.File[] | undefined;
 
       if (!files) {
         return res.status(400).json({
@@ -107,30 +140,30 @@ const PdfImportController = {
 
       for (const file of files) {
         try {
-          const text = await extractPdfText(file.buffer);
-
-          if (!text.trim()) {
-            return res.status(400).json({
-              message:
-                `File "${file.originalname}" không có text layer. ` +
-                `Có thể đây là file PDF quét ảnh (scan). ` +
-                `Vui lòng sử dụng PDF có chứa text.`,
-            });
+          let text = await extractPdfText(file.buffer);
+          
+          if (!hasMeaningfulText(text)) {
+            //extractPdfWithOcr
+            console.log("cần ocr");
+            text = await extractPdfTextUsingOCR(file.buffer);
+            // return res.status(400).json({
+            //   message:
+            //     `File "${file.originalname}" không có text layer. ` +
+            //     `Có thể đây là file PDF quét ảnh (scan). ` +
+            //     `Vui lòng sử dụng PDF có chứa text.`,
+            // });
           }
-
+          console.log("ko can ocr");
+          console.log(text);
           parsedFiles.push({
             originalname: file.originalname,
             text,
           });
         } catch (error) {
-          console.error(
-            `PDF parse error for ${file.originalname}:`,
-            error,
-          );
+          console.error(`PDF parse error for ${file.originalname}:`, error);
 
           return res.status(400).json({
-            message:
-              `Không thể đọc nội dung file "${file.originalname}"`,
+            message: `Không thể đọc nội dung file "${file.originalname}"`,
           });
         }
       }
@@ -147,10 +180,7 @@ const PdfImportController = {
         data: assignment,
       });
     } catch (error) {
-      console.error(
-        "PDF Import Controller Error:",
-        error,
-      );
+      console.error("PDF Import Controller Error:", error);
 
       const message =
         error instanceof Error

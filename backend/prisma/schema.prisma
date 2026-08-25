@@ -51,7 +51,7 @@ model Lesson {
 }
 
 model Assignment {
-  id                  Int                  @id @default(autoincrement())
+  id                    Int                  @id @default(autoincrement())
   title               String
   description         String?
   duration_minutes    Int
