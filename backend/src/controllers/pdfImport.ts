@@ -1,11 +1,11 @@
 import type { Request, Response } from "express";
 import { pdf } from "pdf-to-img";
 import { PDFParse } from "pdf-parse";
-
+import { UploadExamRepository } from "@/repositories/uploaded_exam.repository.js";
 import Tesseract from "tesseract.js";
 import PdfImportService from "@/services/pdfImport.js";
 import type { AssignmentRequest } from "@/types/assignments.js";
-
+import { extraction_method_t } from "@prisma/client";
 const MAX_FILES = 5;
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
@@ -14,18 +14,15 @@ interface ParsedPdfFile {
   text: string;
 }
 
+function hasMeaningfulText(text: string) {
+  if (!text) {
+    return false;
+  }
 
-function hasMeaningfulText(text:string) {
-    if (!text) {
-        return false;
-    }
+  // Loại bỏ các marker/metadata do PDF parser sinh ra
+  const cleanedText = text.replace(/--\s*\d+\s+of\s+\d+\s*--/gi, "").trim();
 
-    // Loại bỏ các marker/metadata do PDF parser sinh ra
-    const cleanedText = text
-        .replace(/--\s*\d+\s+of\s+\d+\s*--/gi, "")
-        .trim();
-
-    return cleanedText.length > 0;
+  return cleanedText.length > 0;
 }
 
 async function extractPdfText(buffer: Buffer): Promise<string> {
@@ -134,17 +131,17 @@ const PdfImportController = {
           message: validationError,
         });
       }
-
+      let extraction_method: extraction_method_t = extraction_method_t.PDF_TEXT;
       // 2. Extract text from PDFs
       const parsedFiles: ParsedPdfFile[] = [];
 
       for (const file of files) {
         try {
           let text = await extractPdfText(file.buffer);
-          
+
           if (!hasMeaningfulText(text)) {
             //extractPdfWithOcr
-            console.log("cần ocr");
+            console.log("đang dùng ocr");
             text = await extractPdfTextUsingOCR(file.buffer);
             // return res.status(400).json({
             //   message:
@@ -152,13 +149,25 @@ const PdfImportController = {
             //     `Có thể đây là file PDF quét ảnh (scan). ` +
             //     `Vui lòng sử dụng PDF có chứa text.`,
             // });
+            extraction_method = extraction_method_t.OCR;
           }
-          console.log("ko can ocr");
-          console.log(text);
           parsedFiles.push({
             originalname: file.originalname,
             text,
           });
+
+          if (req.user === undefined) {
+            throw new Error("User not authenticated");
+          }
+          await UploadExamRepository.saveRawText(
+            text,
+            req.user.id,
+            file.originalname,
+            file.size,
+            file.mimetype,
+            extraction_method,
+          );
+          console.log("Đã lưu ")
         } catch (error) {
           console.error(`PDF parse error for ${file.originalname}:`, error);
 

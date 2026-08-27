@@ -1,6 +1,5 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../node_modules/.prisma/client"
 }
 
 datasource db {
@@ -8,13 +7,17 @@ datasource db {
 }
 
 model User {
-  id          Int          @id @default(autoincrement())
-  username    String       @unique
-  password    String
-  role        String       @default("user")
-  created_at  DateTime     @default(now()) @map("created_at")
-  updated_at  DateTime     @default(now()) @updatedAt @map("updated_at")
-  assignments Assignment[]
+  id            Int            @id @default(autoincrement())
+  name          String?        @db.VarChar(255)
+  username      String         @unique @db.VarChar(255)
+  password      String         @db.VarChar(255)
+  phone         String?        @db.VarChar(255)
+  dob           DateTime?      @db.Date
+  role          role_t         @default(TEACHER)
+  created_at    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updated_at    DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  assignments   Assignment[]
+  uploadedExams UploadedExam[]
 
   @@map("User")
 }
@@ -29,7 +32,7 @@ model Grade {
 
 model Subject {
   id      Int      @id @default(autoincrement())
-  subject String   @unique
+  subject String   @unique @db.VarChar(255)
   lessons Lesson[]
 
   @@map("Subjects")
@@ -38,50 +41,54 @@ model Subject {
 model Lesson {
   id                Int                @id @default(autoincrement())
   content           String
-  title             String
+  title             String             @db.VarChar(255)
   lesson_number     Int
   subject_id        Int
   grade_id          Int
-  subject           Subject            @relation(fields: [subject_id], references: [id])
-  grade             Grade              @relation(fields: [grade_id], references: [id])
   lessonAssignments LessonAssignment[]
+  grade             Grade              @relation(fields: [grade_id], references: [id], onDelete: Cascade, map: "fk_lessons_grade")
+  subject           Subject            @relation(fields: [subject_id], references: [id], onDelete: Cascade, map: "fk_lessons_subject")
 
-  @@unique([subject_id, grade_id, lesson_number])
+  @@unique([subject_id, grade_id, lesson_number], map: "uq_lessons_subject_grade_number")
   @@map("Lessons")
 }
 
 model Assignment {
-  id                    Int                  @id @default(autoincrement())
+  id                  Int                  @id @default(autoincrement())
   title               String
   description         String?
   duration_minutes    Int
+  status              assignment_status_t  @default(DRAFT)
   teacher_id          Int
-  created_at          DateTime             @default(now()) @map("created_at")
-  updated_at          DateTime             @default(now()) @updatedAt @map("updated_at")
-  teacher             User                 @relation(fields: [teacher_id], references: [id])
-  lessonAssignments   LessonAssignment[]
+  created_at          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updated_at          DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  teacher             User                 @relation(fields: [teacher_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_assignment_teacher")
   assignmentQuestions AssignmentQuestion[]
+  lessonAssignments   LessonAssignment[]
 
   @@map("Assignment")
 }
 
 model LessonAssignment {
+  id            Int        @id @default(autoincrement())
   assignment_id Int
   lesson_id     Int
-  assignment    Assignment @relation(fields: [assignment_id], references: [id], onDelete: Cascade)
-  lesson        Lesson     @relation(fields: [lesson_id], references: [id], onDelete: Cascade)
+  assignment    Assignment @relation(fields: [assignment_id], references: [id], onDelete: Cascade, map: "fk_lesson_assignment_assignment")
+  lesson        Lesson     @relation(fields: [lesson_id], references: [id], onDelete: Cascade, map: "fk_lesson_assignment_lesson")
 
-  @@id([assignment_id, lesson_id])
+  @@unique([assignment_id, lesson_id], map: "uq_lesson_assignment")
   @@map("Lesson_Assignment")
 }
 
 model Question {
   id                  Int                  @id @default(autoincrement())
   content             String
-  question_type       String
+  question_type       question_type_t      @default(SINGLE_CHOICE)
+  resource            String?
+  explanation         String?
+  created_at          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updated_at          DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   answer              String?
-  created_at          DateTime             @default(now()) @map("created_at")
-  updated_at          DateTime             @default(now()) @updatedAt @map("updated_at")
   assignmentQuestions AssignmentQuestion[]
   options             QuestionOption[]
 
@@ -89,12 +96,16 @@ model Question {
 }
 
 model AssignmentQuestion {
+  id            Int        @id @default(autoincrement())
   assignment_id Int
   question_id   Int
-  assignment    Assignment @relation(fields: [assignment_id], references: [id], onDelete: Cascade)
-  question      Question   @relation(fields: [question_id], references: [id], onDelete: Cascade)
+  order_index   Int?       @default(1)
+  points        Float?     @default(1.0)
+  created_at    DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime   @default(now()) @db.Timestamptz(6)
+  assignment    Assignment @relation(fields: [assignment_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_aq_assignment")
+  question      Question   @relation(fields: [question_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_aq_question")
 
-  @@id([assignment_id, question_id])
   @@map("Assignment_Question")
 }
 
@@ -102,10 +113,48 @@ model QuestionOption {
   id          Int      @id @default(autoincrement())
   question_id Int
   content     String
-  is_correct  Boolean
-  created_at  DateTime @default(now()) @map("created_at")
-  updated_at  DateTime @default(now()) @updatedAt @map("updated_at")
-  question    Question @relation(fields: [question_id], references: [id], onDelete: Cascade)
+  is_correct  Boolean  @default(false)
+  created_at  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updated_at  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  question    Question @relation(fields: [question_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_options_question")
 
   @@map("Question_Options")
+}
+
+model UploadedExam {
+  id               Int                 @id(map: "uploaded_exam_pkey") @default(autoincrement())
+  userId           Int                 @map("user_id")
+  fileName         String              @map("file_name") @db.VarChar(255)
+  fileSize         BigInt?             @map("file_size")
+  mimeType         String?             @map("mime_type") @db.VarChar(100)
+  rawText          String              @map("raw_text")
+  extractionMethod extraction_method_t @map("extraction_method")
+  createdAt        DateTime?           @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt        DateTime?           @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  user             User                @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_uploaded_exam_user")
+
+  @@map("Uploaded_Exam")
+}
+
+enum assignment_status_t {
+  DRAFT
+  PUBLISHED
+  CLOSED
+}
+
+enum extraction_method_t {
+  PDF_TEXT
+  OCR
+}
+
+enum question_type_t {
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  SHORT_ANSWER
+}
+
+enum role_t {
+  TEACHER
+  STUDENT
 }

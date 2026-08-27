@@ -1,4 +1,5 @@
 import prisma from "@/config/prisma.js";
+import type { role_t } from "@prisma/client";
 
 export const UserRepository = {
   findByUsername: async (username: string) => {
@@ -13,7 +14,7 @@ export const UserRepository = {
     });
   },
 
-  create: async (data: { username: string; password: string; role?: string }) => {
+  create: async (data: { username: string; password: string; role?: role_t }) => {
     return await prisma.user.create({
       data,
       select: {
