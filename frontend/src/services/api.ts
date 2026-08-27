@@ -11,7 +11,7 @@ import type {
 } from "../types";
 
 // const API_BASE_URL = "/api";
-const API_BASE_URL = import.meta.env.VITE_API_URL||"/api";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
 
 const getHeaders = (token?: string | null): HeadersInit => {
   const headers: Record<string, string> = {
@@ -173,7 +173,8 @@ export const api = {
         difficulty: CognitiveLevel;
       }>;
       extra_requirements?: string;
-    }
+    },
+    token?: string | null
   ): Promise<{ message: string; data: AssignmentRequest }> => {
     const formData = new FormData();
     for (const file of files) {
@@ -192,8 +193,14 @@ export const api = {
       if (options.extra_requirements) formData.append("extra_requirements", options.extra_requirements);
     }
 
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
     const res = await fetch(`${API_BASE_URL}/pdf/import`, {
       method: "POST",
+      headers,
       body: formData,
     });
     return handleResponse<{ message: string; data: AssignmentRequest }>(res);

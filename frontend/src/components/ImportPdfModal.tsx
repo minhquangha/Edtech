@@ -162,7 +162,7 @@ export const ImportPdfModal: React.FC<ImportPdfModalProps> = ({ isOpen, onClose,
 
     try {
       // Send FormData with pdfs to backend without old config fields
-      const result = await api.importPdfsAndGenerate(files);
+      const result = await api.importPdfsAndGenerate(files, undefined, token);
       const rawData = result.data;
 
       const normalizedQuestions: QuestionRequest[] = (rawData.questions || []).map((q: RawQuestionResponse) => {
