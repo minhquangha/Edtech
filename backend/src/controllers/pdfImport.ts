@@ -1,9 +1,7 @@
 import type { Request, Response } from "express";
-import { pdf } from "pdf-to-img";
-import { PDFParse } from "pdf-parse";
 import { UploadExamRepository } from "@/repositories/uploaded_exam.repository.js";
-import Tesseract from "tesseract.js";
 import PdfImportService from "@/services/pdfImport.js";
+import PdfExtractorService from "@/services/pdfExtractor.js";
 import type { AssignmentRequest } from "@/types/assignments.js";
 import { extraction_method_t } from "@prisma/client";
 const MAX_FILES = 5;
@@ -12,82 +10,6 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024;
 interface ParsedPdfFile {
   originalname: string;
   text: string;
-}
-
-function hasMeaningfulText(text: string) {
-  if (!text) {
-    return false;
-  }
-
-  // Loại bỏ các marker/metadata do PDF parser sinh ra
-  const cleanedText = text.replace(/--\s*\d+\s+of\s+\d+\s*--/gi, "").trim();
-
-  return cleanedText.length > 0;
-}
-
-async function extractPdfText(buffer: Buffer): Promise<string> {
-  const pdf = new PDFParse({ data: buffer });
-  const result = await pdf.getText();
-
-  if (typeof result === "string") {
-    return result;
-  }
-
-  if (result && typeof result === "object") {
-    const r = result as {
-      pages?: unknown[];
-      text?: string;
-    };
-
-    if (typeof r.text === "string") {
-      return r.text;
-    }
-
-    if (Array.isArray(r.pages)) {
-      return r.pages
-        .map((page: unknown) => {
-          if (typeof page === "string") {
-            return page;
-          }
-
-          if (page && typeof page === "object" && "text" in page) {
-            return String((page as { text: unknown }).text ?? "");
-          }
-
-          return "";
-        })
-        .join("\n\n");
-    }
-  }
-
-  return "";
-}
-
-async function extractPdfTextUsingOCR(buffer: Buffer): Promise<string> {
-  const document = await pdf(buffer, {
-    scale: 2,
-  });
-  let fullText = "";
-  let pageNumber = 0;
-  for await (const image of document) {
-    pageNumber++;
-
-    console.log(`\nĐang OCR trang ${pageNumber}...`);
-
-    const result = await Tesseract.recognize(image, "vie");
-
-    const text = result.data.text;
-
-    console.log(`OCR trang ${pageNumber} hoàn thành`);
-
-    fullText += `--- Trang ${pageNumber} ---\n`;
-
-    fullText += text.trim();
-
-    fullText += "\n\n";
-  }
-  document.destroy();
-  return fullText;
 }
 
 function validateUploadedFiles(files: Express.Multer.File[]): string | null {
@@ -131,26 +53,16 @@ const PdfImportController = {
           message: validationError,
         });
       }
-      let extraction_method: extraction_method_t = extraction_method_t.PDF_TEXT;
+      
       // 2. Extract text from PDFs
       const parsedFiles: ParsedPdfFile[] = [];
 
       for (const file of files) {
         try {
-          let text = await extractPdfText(file.buffer);
+          const extractionResult = await PdfExtractorService.extractPdfContent(file.buffer);
+          const text = extractionResult.rawText;
+          const extraction_method = extractionResult.extractionMethod;
 
-          if (!hasMeaningfulText(text)) {
-            //extractPdfWithOcr
-            console.log("đang dùng ocr");
-            text = await extractPdfTextUsingOCR(file.buffer);
-            // return res.status(400).json({
-            //   message:
-            //     `File "${file.originalname}" không có text layer. ` +
-            //     `Có thể đây là file PDF quét ảnh (scan). ` +
-            //     `Vui lòng sử dụng PDF có chứa text.`,
-            // });
-            extraction_method = extraction_method_t.OCR;
-          }
           parsedFiles.push({
             originalname: file.originalname,
             text,
@@ -167,7 +79,7 @@ const PdfImportController = {
             file.mimetype,
             extraction_method,
           );
-          console.log("Đã lưu ")
+          console.log("Đã lưu ");
         } catch (error) {
           console.error(`PDF parse error for ${file.originalname}:`, error);
 
