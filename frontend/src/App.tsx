@@ -88,7 +88,7 @@ function MainApp() {
       />
 
       <CreateAssignmentModal
-        key={importedAssignment ? `imported-${Date.now()}` : "normal"}
+        key={importedAssignment ? "imported" : "normal"}
         isOpen={isCreateModalOpen}
         onClose={() => {
           setIsCreateModalOpen(false);

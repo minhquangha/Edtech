@@ -154,10 +154,10 @@ export const AssignmentDetailModal: React.FC<AssignmentDetailModalProps> = ({
       let existingAnswers = oldQuestion.answers || [];
       if (existingAnswers.length === 0) {
         existingAnswers = [
-          { id: Date.now() + 1, content: "Lựa chọn A", isCorrect: true },
-          { id: Date.now() + 2, content: "Lựa chọn B", isCorrect: false },
-          { id: Date.now() + 3, content: "Lựa chọn C", isCorrect: false },
-          { id: Date.now() + 4, content: "Lựa chọn D", isCorrect: false },
+          { id: 1, content: "Lựa chọn A", isCorrect: true },
+          { id: 2, content: "Lựa chọn B", isCorrect: false },
+          { id: 3, content: "Lựa chọn C", isCorrect: false },
+          { id: 4, content: "Lựa chọn D", isCorrect: false },
         ];
       } else if (newType === "SINGLE_CHOICE") {
         let found = false;
