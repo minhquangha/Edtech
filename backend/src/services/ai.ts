@@ -2,7 +2,7 @@ import type { AiRequest } from "@/types/ai-service.js";
 import type { AssignmentRequest, CognitiveLevel, QuestionType } from "@/types/assignments.js";
 
 import gemini from "@/config/gemini.js";
-import { assignmentAiSchema } from "@/models/ai-schema.js";
+import { assignmentAiSchema } from "@/types/ai-service.js";
 import { LessonRepository } from "@/repositories/lesson.repository.js";
 interface GeminiQuestionAnswer {
   content: string;
@@ -199,7 +199,7 @@ Generate the assignment now.
         },
       });
 
-      
+
 
       if (!response.text) {
         throw new Error("Gemini returned an empty response");

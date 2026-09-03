@@ -6,6 +6,8 @@
   "main": "index.js",
   "scripts": {
     "test": "vitest run",
+    "test:perf": "tsx test/performance/node-runner.js",
+    "test:load": "tsx test/performance/http-runner.js",
     "dev": "tsx watch -r tsconfig-paths/register src/index.ts",
     "build": "prisma generate && tsc -p tsconfig.build.json",
     "postinstall": "prisma generate",

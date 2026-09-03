@@ -1,5 +1,5 @@
 import gemini from "@/config/gemini.js";
-import { assignmentAiSchema } from "@/models/ai-schema.js";
+import { assignmentAiSchema } from "@/types/ai-service.js";
 
 interface PdfFileMeta {
   originalname: string;

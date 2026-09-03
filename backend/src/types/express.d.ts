@@ -1,9 +1,13 @@
-import { User } from "@/types/user.js";
+import "express";
 
 declare global {
   namespace Express {
     interface Request {
-      user?: User;
+      user?: {
+        id: number;
+        username: string;
+        role: string;
+      };
     }
   }
 }

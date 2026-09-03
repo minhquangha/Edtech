@@ -109,3 +109,10 @@ export interface AnswerUpdateRequest {
   content: string;
   isCorrect: boolean;
 }
+
+export interface AssignmentImport {
+  title: string;
+  class_level: string;
+  description: string;
+  subject: string;
+}
