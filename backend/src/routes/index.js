@@ -1,0 +1,14 @@
+import { Router } from "express";
+import userRouter from "@/routes/users.js";
+import assignmentRouter from "@/routes/assignments.js";
+import aiRouter from "@/routes/ai.js";
+import pdfImportRouter from "@/routes/pdfImport.js";
+import authenticate from "@/middlewares/authenticator.js";
+const router = Router();
+router.use("/ai", aiRouter);
+router.use("/pdf", authenticate, pdfImportRouter);
+router.use("/users", userRouter);
+router.use("/assignments", authenticate, assignmentRouter);
+// router.use("/assignments", assignmentRouter);
+export default router;
+//# sourceMappingURL=index.js.map

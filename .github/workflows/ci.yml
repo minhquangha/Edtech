@@ -10,53 +10,67 @@ jobs:
   backend-ci:
     name: Backend CI
     runs-on: ubuntu-latest
-
+    #Bước sau sẽ không chạy nếu bước trước bị lỗi (trừ khi cấu hình đặc biệt).
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4 # ~git clone your-repository
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        #Cài Node.js 20
+        uses: actions/setup-node@v4 
         with:
           node-version: 20
 
       - name: Install pnpm
+      #cài pnpm version 10.21.0
         uses: pnpm/action-setup@v3
         with:
           version: 10.21.0
-
+      #tạo STORE_PATH
       - name: Get pnpm store directory
+      #step khác có thể lấy giá trị bằng lệnh ${{ steps.pnpm-cache.outputs.STORE_PATH }}
         id: pnpm-cache
         shell: bash
+        # pnpm lưu các package đã tải vào một thư mục cache gọi là: store
+        #Lệnh: pnpm store path --silent trả về đường dẫn đi vào store.
+        #>> $GITHUB_OUTPUT tức là lưu output của step này cho các step sau.(ở step này output là "STORE_PATH=$(pnpm store path --silent)")
         run: |
           echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
-
+      #setup pnpm cache
       - name: Setup pnpm cache
         uses: actions/cache@v4
         with:
           path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          #Tạo key cho cache đã dc tạo và GitHub tạo cache mới khi key này bị thay đổi
           key: ${{ runner.os }}-pnpm-backend-${{ hashFiles('backend/pnpm-lock.yaml') }}
+          #Nếu GitHub không tìm thấy cache chính xác nó sẽ tìm cache có key bắt đầu bằng: Linux-pnpm-backend-.
           restore-keys: |
             ${{ runner.os }}-pnpm-backend-
 
       - name: Install Backend Dependencies
+      #~ cd backend sau đó chạy lệnh pnpm install --frozen-lockfile(--frozen-lockfile giúp check: package.json và pnpm-lock.yaml có khớp nhau ko.)
         working-directory: ./backend
+        #Cài dependencies backend
         run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma Client
+      #~cd backend sau đó chạy lệnh pnpm prisma generate(prisma sẽ tạo code/client để sử dụng:prisma.user.findMany();--> ví dụ)
         working-directory: ./backend
         run: pnpm prisma generate
-
+      
       - name: Type Check Backend
         working-directory: ./backend
+        #Kiểm tra lỗi TypeScript nhưng không tạo file JavaScript.
         run: npx tsc --noEmit
 
       - name: Run Backend Tests
         working-directory: ./backend
+        #Chạy toàn bộ test backend.
         run: pnpm test
 
       - name: Build Backend
         working-directory: ./backend
+        #Chạy build backend.
         run: pnpm build
 
   frontend-ci:
@@ -83,8 +97,10 @@ jobs:
 
       - name: Run ESLint
         working-directory: ./frontend
+        # kiểm tra chất lượng code.
         run: pnpm run lint
 
       - name: Build Frontend
         working-directory: ./frontend
+        #Chạy build frontend.
         run: pnpm run build

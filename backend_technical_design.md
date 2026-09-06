@@ -13,7 +13,9 @@
 | **ORM & Driver** | Prisma ORM & `@prisma/adapter-pg` | `^7.9.1` | Type-safe ORM với Prisma Client, kết hợp Driver Adapter `pg.Pool` cho phép quản lý Connection Pooling tối ưu. |
 | **AI Engine Integration** | Google GenAI SDK | `^2.16.0` | Tích hợp trực tiếp với model **`gemini-3.6-flash`**, hỗ trợ **Structured Outputs** (`responseSchema`) để ép kiểu JSON đầu ra chính xác 100%. |
 | **Authentication** | JSON Web Token (`jsonwebtoken`) & `bcrypt` | `^9.0.3` / `^6.0.0` | Xác thực stateless bằng JWT Bearer Token, mã hóa mật khẩu người dùng chuẩn Bcrypt với Salt round = 10. |
-| **File Processing & Storage** | `multer` & `pdf-parse` | `^2.1.1` / `^2.4.5` | Multer xử lý Upload file lưu tạm trên Memory Buffer (RAM). `pdf-parse` đọc và trích xuất text layer từ tài liệu PDF. |
+| **File Processing & Storage** | `multer` & `pdf-parse` | `^2.1.1` / `^2.4.5` | Multer xử lý Upload file lưu tạm trên Memory Buffer (RAM). `pdf-parse` đọc và trích xuất **text layer** từ tài liệu PDF. |
+| **OCR Engine (Scanned PDF)** | `pdf-to-img` & `tesseract.js` | `^6.2.0` / `^7.0.0` | `pdf-to-img` render từng trang PDF (scale 2x) thành ảnh bitmap; `tesseract.js` chạy OCR cục bộ với ngôn ngữ `vie` để trích xuất text cho **PDF không có text layer** (PDF scan ảnh). |
+| **Testing Framework** | Vitest | `^4.1.11` | Test runner tốc độ cao, ESM-native, tích hợp `vi.mock`/`vi.spyOn`, chạy 106 test (Unit/Integration/OCR/E2E/Performance/Quality) qua `pnpm test`. |
 | **Development & Tooling** | `tsx`, `tsconfig-paths`, `dotenv` | `^4.21.0` / `^4.2.0` | Thực thi và nạp mô hình TypeScript trực tiếp không cần compile trung gian trong môi trường dev; nạp biến môi trường. |
 
 ---
@@ -32,7 +34,8 @@ backend/
 ├── prisma/
 │   └── schema.prisma            # Định nghĩa Data Model, Enums & Database Migration Config
 ├── scripts/
-│   └── create-admin.ts          # Script CLI tạo tài khoản Admin ban đầu
+│   ├── create-admin.ts          # Script CLI tạo tài khoản Admin ban đầu
+│   └── generate-test-fixtures.ts # Sinh fixture PDF tổng hợp cho bộ test (chạy CLI hoặc import từ global-setup)
 └── src/
     ├── index.ts                 # Entry point: Khởi tạo Express app, Middlewares & Server Listener
     ├── config/                  # Cấu hình kết nối hạ tầng
@@ -44,18 +47,20 @@ backend/
     │   ├── users.ts             # Xử lý Login & Register
     │   ├── assignments.ts       # Xử lý CRUD Đề thi/Bài tập & Lấy danh mục Khối/Môn/Bài
     │   ├── ai.ts                # Xử lý Request sinh đề tự động bằng AI Gemini
-    │   └── pdfImport.ts         # Xử lý Request tải file PDF & phân tích tạo đề bằng AI
+    │   └── pdfImport.ts         # Xử lý Request tải file PDF, trích xuất raw text, lưu UploadedExam và sinh đề mới bằng AI
     ├── services/                # Business Logic Layer (Xử lý nghiệp vụ chính, tính toán, kết nối AI)
     │   ├── users.ts             # Mã hóa password, xác thực tài khoản, tạo JWT Token
     │   ├── assignments.ts       # Điều phối dữ liệu bài tập, ghép nối thông tin Khối/Môn
     │   ├── ai.ts                # Lấy nội dung bài học, dựng Prompt ma trận kiến thức & gọi Gemini API
-    │   └── pdfImport.ts         # Kiểm tra văn bản PDF, dựng Prompt phân tích cấu trúc & gọi Gemini API
+    │   ├── pdfImport.ts         # Dựng prompt phân tích đề upload và yêu cầu Gemini sinh đề tương đương từ raw text đã extract
+    │   └── pdfExtractor.ts      # Trích xuất text layer, fallback OCR khi PDF scan ảnh, chuẩn hóa raw text và quyết định extractionMethod
     ├── repositories/            # Data Access Layer (Tương tác trực tiếp với Database qua Prisma Transaction)
     │   ├── index.ts             # Export tổng hợp các Repositories
     │   ├── user.repository.ts   # Truy vấn thông tin User (findByUsername, create)
     │   ├── assignment.repository.ts # Thực thi Transaction tạo/sửa/xóa Assignment, Question, Option
     │   ├── lesson.repository.ts # Truy vấn bài học theo Khối/Môn và nạp nội dung bài học theo ID list
-    │   └── curriculum.repository.ts # Truy vấn danh mục Khối (Grade) và Môn (Subject)
+    │   ├── curriculum.repository.ts # Truy vấn danh mục Khối (Grade) và Môn (Subject)
+    │   └── uploaded_exam.repository.ts # Lưu raw text, tên file, dung lượng, mimetype và extraction method của PDF đã upload
     ├── models/                  # Định nghĩa JSON Schema phục vụ Structured Output AI
     │   ├── ai-schema.ts         # Gemini JSON Schema (assignmentAiSchema) cho câu hỏi Trắc nghiệm, Đúng/Sai, Tự luận
     │   ├── assignment.ts       # Validation schema bài tập
@@ -63,6 +68,12 @@ backend/
     ├── middlewares/             # Express Custom Middlewares
     │   ├── authenticator.ts     # Middleware kiểm tra Header `Authorization: Bearer <token>`, giải mã JWT vào `req.user`
     │   └── pdf.ts               # Cấu hình Multer upload giới hạn file size, số lượng và mimetype PDF
+    ├── routes/                  # Định tuyến HTTP
+    │   ├── index.ts             # Gắn các module route và bảo vệ bằng authenticator
+    │   ├── users.ts             # Route đăng ký/đăng nhập
+    │   ├── assignments.ts       # Route CRUD bài tập, danh mục khối/môn/bài
+    │   ├── ai.ts                # Route sinh đề AI
+    │   └── pdfImport.ts         # Route upload PDF và sinh đề từ raw text đã extract
     ├── types/                   # TypeScript Interfaces & Type Definitions
     │   ├── express.d.ts         # Mở rộng Request type của Express để thêm thuộc tính `user`
     │   ├── assignments.ts       # Các DTOs: AssignmentRequest, QuestionRequest, AnswerRequest, AssignmentUpdateRequest...
@@ -70,6 +81,38 @@ backend/
     │   └── user.ts             # User interface
     └── utils/                   # Helper utilities
         └── test-db.ts           # Endpoint kiểm tra sức khỏe cơ sở dữ liệu (`/health`)
+├── test/                        # Test suite (Vitest 4.x)
+│   ├── global-setup.ts          # Global setup Vitest: tự sinh fixture PDF nếu thiếu (CI-safe)
+│   ├── helpers/
+│   │   └── normalize.ts         # Helper normalizeText / normalizeQuestionText cho fuzzy matching
+│   ├── fixtures/                # Binary PDF fixtures (git-tracked, deterministic)
+│   │   ├── text-layer.pdf       # PDF có text layer (cơ bản)
+│   │   ├── scanned.pdf          # PDF scan 2×2 (không text layer, kích hoạt OCR)
+│   │   ├── test1.pdf            # PDF scan thực tế (đề thi vật lý)
+│   │   ├── 1. Hàn Thuyên - Bắc Ninh-1.pdf  # Đề thi thật (part 1, text layer)
+│   │   ├── 1. Hàn Thuyên - Bắc Ninh-2.pdf  # Đề thi thật (part 2, text layer)
+│   │   ├── empty-page.pdf       # PDF trang trống (content stream rỗng)
+│   │   ├── blank-page.pdf       # PDF chỉ có "BT ET" (whitespace)
+│   │   ├── corrupted.pdf        # PDF header + body lỗi (Invalid PDF structure)
+│   │   ├── multi-page.pdf       # PDF 3 trang, mỗi trang có text riêng
+│   │   ├── math-formulas.pdf    # PDF chứa ký hiệu toán/lý (π, λ, N/m, Hz, rad)
+│   │   ├── large-text.pdf       # PDF 60 câu hỏi (test performance)
+│   │   ├── structure-exam.pdf   # PDF có cấu trúc chuẩn (TRUE_FALSE + SHORT_ANSWER + SINGLE_CHOICE)
+│   │   ├── scanned-empty-page.pdf  # PDF scan 2×2 ảnh trắng (OCR không ra text)
+│   │   └── not-a-pdf.txt        # File text thuần (không phải PDF, test mimetype)
+│   ├── pdf-extraction.test.ts         # (8) Test hiện hữu: pipeline cơ bản + đề thật + ký hiệu đặc biệt
+│   ├── pdf-extraction.unit.test.ts     # (23) Unit Test: hasMeaningfulText, extractPdfText, extractPdfContent, normalizeText
+│   ├── pdf-extraction.pdf-text.test.ts # (6) PDF Text Layer Test bổ sung: multi-page, math-formulas, 60 câu, cấu trúc đề, normalize (case cơ bản đã có ở pdf-extraction.test.ts)
+│   ├── pdf-extraction.ocr.test.ts      # (2) OCR Test bổ sung: ảnh trắng scan → page markers, content OCR nhiều trang tiếng Việt (case cơ bản đã có ở pdf-extraction.test.ts)
+│   ├── pdf-extraction.edge-cases.test.ts # (12) Edge Case Test: buffer rỗng, PDF hỏng, non-PDF, markers-only
+│   ├── pdf-import.unit.test.ts         # (12) Unit Test: pdfImportService (validation, prompt, parse AI response)
+│   ├── pdf-import.integration.test.ts  # (7) Integration Test: extract → saveRawText → generateFromPdfs (cả 2 luồng)
+│   ├── pdf-import.e2e.test.ts          # (12) E2E Test: controller + multer, validation, error codes, save raw text
+│   ├── pdf-import.performance.test.ts  # (7) Performance Test: benchmark extraction time (text layer & OCR)
+│   └── pdf-import-quality.test.ts      # (9) Quality Test: schema validity, question density, type distribution, topic relevance
+├── vitest.config.ts            # Cấu hình Vitest (alias @/, testTimeout 60s, globalSetup)
+└── .github/workflows/
+    └── backend-ci.yml          # CI pipeline: checkout → pnpm install → lint → typecheck → test → build
 ```
 
 ---
@@ -81,6 +124,7 @@ backend/
 ```mermaid
 erDiagram
     User ||--o{ Assignment : "tạo (1:N)"
+    User ||--o{ Uploaded_Exam : "upload (1:N)"
     Grades ||--o{ Lessons : "chứa (1:N)"
     Subjects ||--o{ Lessons : "thuộc (1:N)"
     Assignment ||--o{ Lesson_Assignment : "liên kết (1:N)"
@@ -93,7 +137,19 @@ erDiagram
         Int id PK
         String username UK
         String password
-        String role
+        role_t role
+        DateTime created_at
+        DateTime updated_at
+    }
+
+    Uploaded_Exam {
+        Int id PK
+        Int userId FK
+        String fileName
+        BigInt fileSize
+        String mimeType
+        String rawText
+        extraction_method_t extractionMethod
         DateTime created_at
         DateTime updated_at
     }
@@ -122,6 +178,7 @@ erDiagram
         String title
         String description
         Int duration_minutes
+        assignment_status_t status
         Int teacher_id FK
         DateTime created_at
         DateTime updated_at
@@ -135,7 +192,9 @@ erDiagram
     Question {
         Int id PK
         String content
-        String question_type
+        question_type_t question_type
+        String resource
+        String explanation
         String answer
         DateTime created_at
         DateTime updated_at
@@ -144,6 +203,8 @@ erDiagram
     Assignment_Question {
         Int assignment_id PK, FK
         Int question_id PK, FK
+        Int order_index
+        Float points
     }
 
     Question_Options {
@@ -165,9 +226,27 @@ Lưu trữ thông tin người dùng / giáo viên trong hệ thống.
 | `id` | `INT` | Primary Key, Autoincrement | | Mã định danh duy nhất của người dùng |
 | `username` | `VARCHAR` | Unique, Not Null | | Tên đăng nhập tài khoản |
 | `password` | `VARCHAR` | Not Null | | Mật khẩu đã được băm (Bcrypt hash) |
-| `role` | `VARCHAR` | Not Null | `"user"` | Vai trò hệ thống (`teacher`, `admin`, `user`) |
+| `role` | `role_t` (enum) | Not Null | `TEACHER` | Vai trò hệ thống: `TEACHER`, `STUDENT` |
 | `created_at` | `TIMESTAMP` | Not Null | `now()` | Thời gian tạo tài khoản |
 | `updated_at` | `TIMESTAMP` | Not Null | `@updatedAt` | Thời gian cập nhật tài khoản gần nhất |
+
+> Mối quan hệ: `User 1─N Uploaded_Exam` (một giáo viên có thể upload nhiều đề PDF).
+
+#### Bảng `Uploaded_Exam` (`@@map("Uploaded_Exam")`)
+Lưu trữ **raw text đã trích xuất** từ mỗi file PDF mà giáo viên upload — đây là dữ liệu nguồn để giáo viên có thể **tạo lại đề từ các đề đã upload trước đó** (re-use) và phục vụ kiểm thử chất lượng.
+| Tên cột | Kiểu dữ liệu | Ràng buộc | Mặc định | Mô tả |
+| :--- | :--- | :--- | :--- | :--- |
+| `id` | `INT` | Primary Key, Autoincrement | | Mã định danh bản ghi upload |
+| `userId` | `INT` | Foreign Key -> `User(id)` | | Giáo viên thực hiện upload |
+| `fileName` | `VARCHAR(255)` | Not Null | | Tên file gốc khi upload (VD: `text-layer.pdf`) |
+| `fileSize` | `BIGINT` | Nullable | | Kích thước file (bytes) |
+| `mimeType` | `VARCHAR(100)` | Nullable | | `application/pdf` |
+| `rawText` | `TEXT` | Not Null | | Toàn bộ văn bản trích xuất từ PDF (text layer hoặc OCR) |
+| `extractionMethod` | `extraction_method_t` (enum) | Not Null | | Phương thức đã dùng: `PDF_TEXT` hoặc `OCR` |
+| `createdAt` | `TIMESTAMP` | Nullable | `now()` | Thời điểm upload |
+| `updatedAt` | `TIMESTAMP` | Nullable | `@updatedAt` | Thời điểm cập nhật |
+
+> **`rawText`** là nền tảng cho tính năng "tạo đề từ đề đã upload": hệ thống giữ lại văn bản gốc để mỗi lần tạo đề mới không cần đọc lại file PDF, đồng thời phục vụ các bài test đánh giá chất lượng đề (question density, giữ nguyên chủ đề...) trên raw text của cả 2 luồng có/không có text layer.
 
 #### Bảng `Grades` (`@@map("Grades")`)
 Danh mục Khối / Lớp học trong chương trình giáo dục.
@@ -203,6 +282,7 @@ Lưu trữ thông tin đề thi / bài tập do Giáo viên tạo hoặc sinh b�
 | `title` | `VARCHAR` | Not Null | | Tiêu đề bài tập / đề kiểm tra |
 | `description` | `TEXT` | Nullable | | Ghi chú / mô tả bài tập |
 | `duration_minutes`| `INT` | Not Null | | Thời gian làm bài (tính theo phút) |
+| `status` | `assignment_status_t` (enum) | Not Null | `DRAFT` | Trạng thái đề: `DRAFT`, `PUBLISHED`, `CLOSED` |
 | `teacher_id` | `INT` | Foreign Key -> `User(id)` | | Giáo viên tạo bài tập |
 | `created_at` | `TIMESTAMP` | Not Null | `now()` | Ngày tạo bài tập |
 | `updated_at` | `TIMESTAMP` | Not Null | `@updatedAt` | Ngày sửa bài tập gần nhất |
@@ -220,9 +300,11 @@ Kho lưu trữ nội dung các câu hỏi.
 | Tên cột | Kiểu dữ liệu | Ràng buộc | Mặc định | Mô tả |
 | :--- | :--- | :--- | :--- | :--- |
 | `id` | `INT` | Primary Key, Autoincrement | | Mã định danh câu hỏi |
-| `content` | `TEXT` | Not Null | | Nội dung câu hỏi (chứa công thức LaTeX nếu có) |
-| `question_type` | `VARCHAR` | Not Null | | Loại câu hỏi: `MULTIPLE_CHOICE`, `SINGLE_CHOICE`, `TRUE_FALSE`, `SHORT_ANSWER` |
-| `answer` | `TEXT` | Nullable | | Đáp án ngắn (với SHORT_ANSWER) hoặc `true`/`false` (với TRUE_FALSE) |
+| `content` | `TEXT` | Not Null | | Nội dung câu hỏi (chứa công thức LaTeX `\\(...\\)` nếu có) |
+| `question_type` | `question_type_t` (enum) | Not Null | `SINGLE_CHOICE` | Loại câu hỏi: `SINGLE_CHOICE`, `MULTIPLE_CHOICE`, `TRUE_FALSE`, `SHORT_ANSWER` |
+| `resource` | `TEXT` | Nullable | | Tài nguyên / tài liệu tham khảo kèm câu hỏi |
+| `explanation` | `TEXT` | Nullable | | Lời giải thích / hướng dẫn chi tiết cho câu hỏi |
+| `answer` | `TEXT` | Nullable | | Đáp án ngắn (với `SHORT_ANSWER`) hoặc `true`/`false` (với `TRUE_FALSE`) |
 | `created_at` | `TIMESTAMP` | Not Null | `now()` | Thời gian tạo |
 | `updated_at` | `TIMESTAMP` | Not Null | `@updatedAt` | Thời gian cập nhật |
 
@@ -232,7 +314,8 @@ Bảng trung gian liên kết Bài tập với các Câu hỏi (Quan hệ N-N).
 | :--- | :--- | :--- | :--- |
 | `assignment_id`| `INT` | Foreign Key -> `Assignment(id)` ON DELETE CASCADE | Mã bài tập |
 | `question_id` | `INT` | Foreign Key -> `Question(id)` ON DELETE CASCADE | Mã câu hỏi |
-| **Primary Key** | `(assignment_id, question_id)` | Composite Primary Key | Khóa chính phức hợp |
+| `order_index` | `INT` | Nullable | `1` | Thứ tự câu hỏi trong đề (sắp xếp) |
+| `points` | `FLOAT` | Nullable | `1.0` | Số điểm cho câu hỏi này |
 
 #### Bảng `Question_Options` (`@@map("Question_Options")`)
 Lưu các phương án lựa chọn A, B, C, D cho từng câu hỏi.
