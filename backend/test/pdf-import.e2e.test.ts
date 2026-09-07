@@ -6,10 +6,24 @@ import type { Request, Response } from "express";
 import PdfImportController from "@/controllers/pdfImport.js";
 import PdfExtractorService from "@/services/pdfExtractor.js";
 import { extraction_method_t } from "@prisma/client";
-//kiểm tra 1 luồng thực tế từ lúc upload file đến khi AI sinh ra đề kiểm tra từ file đó
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const fixturesDir = path.join(__dirname, "fixtures");
+
+/**
+ * E2E TESTS — PdfImportController.import: 1 luồng thực tế từ lúc upload file
+ * đến khi AI sinh ra đề kiểm tra từ file đó (mô phỏng request HTTP POST /pdf/import).
+ *
+ * Chạy thật : validateUploadFiles (giới hạn 5 file / 10MB / mimetype) +
+ *             extractPdfContent (fixture PDF thật).
+ * Được mock : Gemini (AI) và UploadExamRepository (DB).
+ *
+ * Phủ các nhánh response:
+ *   200 — happy path: text layer, OCR scan, đề thật, nhiều file
+ *   400 — không file, > 5 file, file > 10MB, sai mimetype, PDF hỏng, chưa đăng nhập
+ *   500 — AI trả JSON không hợp lệ
+ */
 
 function readFixture(name: string): Buffer {
   return fs.readFileSync(path.join(fixturesDir, name));
@@ -26,6 +40,7 @@ vi.mock("@/repositories/uploaded_exam.repository.js", () => ({
   UploadExamRepository: { saveRawText: (...a: unknown[]) => mockSaveRawText(...a) },
 }));
 
+// Response AI "chuẩn" cho mọi happy path
 const AI_ASSIGNMENT = {
   title: "Đề kiểm tra Vật lý 11",
   description: "Đề kiểm tra 45 phút",
@@ -46,6 +61,7 @@ const AI_ASSIGNMENT = {
   ],
 };
 
+// Dựng Express.Multer.File giả từ tên + buffer (giả lập Multer đã parse xong)
 function makeFile(
   originalname: string,
   buffer: Buffer,
@@ -73,6 +89,7 @@ function savedCall(index = 0): unknown[] {
   return call;
 }
 
+// Response Express giả ghi lại statusCode + body để assert
 function createMockRes(): {
   status: (code: number) => ReturnType<typeof vi.fn>;
   json: (body: unknown) => ReturnType<typeof vi.fn>;
@@ -103,6 +120,11 @@ describe("E2E — PdfImportController.import (upload → extract → save → ge
   });
 
   // ── Happy path: PDF có text layer ───────────────────────────────────────
+  /**
+   * Upload text-layer.pdf → HTTP 200, body.data == đề AI sinh ra; đồng thời
+   * raw text phải được lưu với ĐỦ 6 trường đúng giá trị (user 42, tên file,
+   * dung lượng > 0, mime PDF, method = PDF_TEXT).
+   */
   it("should return 200 and save PDF_TEXT raw text for a text-layer PDF", async () => {
     const req = {
       files: [makeFile("text-layer.pdf", readFixture("text-layer.pdf"))],
@@ -130,6 +152,11 @@ describe("E2E — PdfImportController.import (upload → extract → save → ge
   });
 
   // ── Happy path: PDF không có text layer (scanned → OCR) ────────────────
+  /**
+   * Upload scanned.pdf (ảnh scan) → HTTP 200; raw text lưu phải có marker OCR
+   * "--- Trang 1 ---" và method = OCR.
+   * Timeout 60s vì OCR chạy thật.
+   */
   it("should return 200 and save OCR raw text for a scanned PDF", async () => {
     const req = {
       files: [makeFile("scanned.pdf", readFixture("scanned.pdf"))],
@@ -146,7 +173,11 @@ describe("E2E — PdfImportController.import (upload → extract → save → ge
     expect(ocrMethod).toBe(extraction_method_t.OCR);
   }, 60_000);
 
-  // ── Happy path: real-world exam PDF ─────────────────────────────────────
+  // ── Happy path: đề thi thật ─────────────────────────────────────────────
+  /**
+   * Upload đề Hàn Thuyên thật (255 KB) → HTTP 200; method = PDF_TEXT
+   * (đề số hóa thật phải đi luồng text layer, không OCR).
+   */
   it("should generate an assignment from a real-world exam PDF upload", async () => {
     const req = {
       files: [makeFile("exam-1.pdf", readFixture("1. Hàn Thuyên - Bắc Ninh-1.pdf"))],
@@ -161,7 +192,11 @@ describe("E2E — PdfImportController.import (upload → extract → save → ge
     expect(savedCall()[5]).toBe(extraction_method_t.PDF_TEXT);
   });
 
-  // ── Happy path: multiple PDFs (mixed methods) ───────────────────────────
+  // ── Happy path: nhiều file cùng lúc (kỹ thuật trộn) ────────────────────
+  /**
+   * Upload 2 file 1 lần → saveRawText gọi đúng 2 lần (MỖI file 1 lần),
+   * method của từng file ghi đúng theo nội dung file đó.
+   */
   it("should process multiple uploaded PDFs and save raw text for each", async () => {
     const req = {
       files: [
@@ -187,7 +222,8 @@ describe("E2E — PdfImportController.import (upload → extract → save → ge
     ]);
   });
 
-  // ── Validation: no files ────────────────────────────────────────────────
+  // ── Validation: không có file ───────────────────────────────────────────
+  /** Upload rỗng → HTTP 400 "Vui lòng tải lên ít nhất 1 file PDF", không đụng DB/AI. */
   it("should return 400 when no files are uploaded", async () => {
     const req = { user: { id: 1 } } as unknown as Request;
     const res = createMockRes();
@@ -201,7 +237,8 @@ describe("E2E — PdfImportController.import (upload → extract → save → ge
     expect(mockSaveRawText).not.toHaveBeenCalled();
   });
 
-  // ── Validation: more than 5 files ───────────────────────────────────────
+  // ── Validation: quá 5 file ──────────────────────────────────────────────
+  /** 6 file → HTTP 400 "tối đa 5 file PDF" (giới hạn số file của Multer/controller). */
   it("should return 400 when more than 5 files are uploaded", async () => {
     const file = makeFile("a.pdf", readFixture("text-layer.pdf"));
     const req = {
@@ -217,7 +254,8 @@ describe("E2E — PdfImportController.import (upload → extract → save → ge
     expect(mockSaveRawText).not.toHaveBeenCalled();
   });
 
-  // ── Validation: file too large ──────────────────────────────────────────
+  // ── Validation: file vượt 10MB ──────────────────────────────────────────
+  /** Buffer 10MB+1 byte → HTTP 400 "vượt quá giới hạn 10MB" (giới hạn dung lượng). */
   it("should return 400 when a file exceeds 10MB", async () => {
     const bigBuffer = Buffer.alloc(10 * 1024 * 1024 + 1, 0x41);
     const req = {
@@ -232,7 +270,8 @@ describe("E2E — PdfImportController.import (upload → extract → save → ge
     expect((res.body as { message: string }).message).toContain("vượt quá giới hạn 10MB");
   });
 
-  // ── Validation: non-PDF mimetype ────────────────────────────────────────
+  // ── Validation: sai mimetype ────────────────────────────────────────────
+  /** File text/plain → HTTP 400 "không phải là PDF" (fileFilter không cho qua). */
   it("should return 400 when an uploaded file is not a PDF", async () => {
     const txt = fs.readFileSync(path.join(fixturesDir, "not-a-pdf.txt"));
     const req = {
@@ -247,7 +286,11 @@ describe("E2E — PdfImportController.import (upload → extract → save → ge
     expect((res.body as { message: string }).message).toContain("không phải là PDF");
   });
 
-  // ── Failure: unreadable PDF ─────────────────────────────────────────────
+  // ── Lỗi: PDF hỏng không đọc được ────────────────────────────────────────
+  /**
+   * Upload corrupted.pdf → HTTP 400 "Không thể đọc nội dung file ..." và
+   * KHÔNG save raw text (dữ liệu hỏng không được ghi DB).
+   */
   it("should return 400 when the PDF cannot be read (corrupted file)", async () => {
     const req = {
       files: [makeFile("broken.pdf", readFixture("corrupted.pdf"))],
@@ -264,7 +307,11 @@ describe("E2E — PdfImportController.import (upload → extract → save → ge
     expect(mockSaveRawText).not.toHaveBeenCalled();
   });
 
-  // ── Failure: AI returns invalid JSON → 500 ──────────────────────────────
+  // ── Lỗi: AI trả JSON không hợp lệ → 500 ─────────────────────────────────
+  /**
+   * AI trả text không phải JSON sau khi extract thành công → HTTP 500 với
+   * message lỗi gốc (lỗi hệ thống, không phải lỗi người dùng).
+   */
   it("should return 500 when the AI service returns invalid JSON", async () => {
     mockGenerateContent.mockResolvedValue({ text: "this is not json" });
 
@@ -282,7 +329,11 @@ describe("E2E — PdfImportController.import (upload → extract → save → ge
     );
   });
 
-  // ── Failure: user not authenticated ─────────────────────────────────────
+  // ── Lỗi: chưa đăng nhập ─────────────────────────────────────────────────
+  /**
+   * Thiếu req.user (route thật được authenticator chặn trước, controller tự
+   * bảo vệ thêm) → HTTP 400 với message về đọc file.
+   */
   it("should return 400 when the user is not authenticated", async () => {
     const req = {
       files: [makeFile("text-layer.pdf", readFixture("text-layer.pdf"))],
@@ -297,7 +348,11 @@ describe("E2E — PdfImportController.import (upload → extract → save → ge
     );
   });
 
-  // ── Spies used to confirm extraction methods recorded ───────────────────
+  // ── Kiểm chứng tính toàn vẹn raw text ───────────────────────────────────
+  /**
+   * Toàn vẹn end-to-end: raw text controller lưu vào DB phải TRÙNG KHỚP 100%
+   * với output của extractPdfContent (không biến đổi, không mất ký tự).
+   */
   it("should record the same raw text that extractPdfContent produced", async () => {
     const extraction = await PdfExtractorService.extractPdfContent(
       readFixture("text-layer.pdf")

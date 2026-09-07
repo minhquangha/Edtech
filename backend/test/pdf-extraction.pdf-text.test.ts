@@ -15,13 +15,26 @@ function readFixture(name: string): Buffer {
 }
 
 /**
- * Các case cơ bản (text-layer.pdf, đề Hàn Thuyên part 1/2) đã được cover
- * trong pdf-extraction.test.ts (TC01, TC05, TC06, TC08). File này chỉ chứa
- * các case text-layer chưa được cover ở nơi khác: fixture tổng hợp đa dạng
- * và độ phủ số lượng câu hỏi.
+ * PDF TEXT LAYER TESTS — các trường hợp BỔ SUNG (không trùng pdf-extraction.test.ts).
+ *
+ * Các case cơ bản (text-layer.pdf, đề Hàn Thuyên part 1/2, ký hiệu vật lý trên
+ * đề thật) đã được cover ở file pdf-extraction.test.ts (TC01, TC05–TC08).
+ * File này tập trung vào fixture TỔNG HỢP đa dạng và ĐỘ PHỦ số lượng:
+ *
+ *   1. multi-page.pdf     — PDF 3 trang, mỗi trang nội dung riêng
+ *   2. math-formulas.pdf  — ký hiệu toán/lý tổng hợp (π, λ, δ, đơn vị đo)
+ *   3. large-text.pdf     — PDF 60 câu hỏi (độ phủ số lượng)
+ *   4. structure-exam.pdf — đề có cấu trúc phân mục + nhiều loại câu hỏi
+ *   5. blank-page.pdf     — trang trắng → không meaningful
+ *   6. normalizeQuestionText — helper fuzzy matching (xóa dấu + số)
  */
 describe("PDF Text Layer Extraction — các trường hợp bổ sung", () => {
-  //kiểm tra trích xuất text từ PDF có nhiều trang.
+  /**
+   * PDF nhiều trang: KHÔNG được mất trang nào.
+   * Đầu vào : multi-page.pdf (3 trang: Vật lý / Toán / Hóa, mỗi trang 1 câu).
+   * Kỳ vọng : method = PDF_TEXT; cả 3 câu của 3 trang đều xuất hiện trong
+   *            rawText sau normalize.
+   */
   it("should extract every page of a multi-page PDF", async () => {
     const result = await PdfExtractorService.extractPdfContent(
       readFixture("multi-page.pdf")
@@ -34,7 +47,12 @@ describe("PDF Text Layer Extraction — các trường hợp bổ sung", () => {
     expect(normalized).toContain("cau 2: trang hai - toan hoc");
     expect(normalized).toContain("cau 3: trang ba - hoa hoc");
   });
-  //kiểm tra trích xuất các ký hiệu toán học và đơn vị đo lường.
+
+  /**
+   * Ký hiệu khoa học trên fixture TỔNG HỢP (bổ sung cho TC08 vốn test trên đề thật).
+   * Đầu vào : math-formulas.pdf chứa π = 3.14159, λ = 600 nm, δ = 2 cm, n/m, Hz, rad.
+   * Kỳ vọng : method = PDF_TEXT; toàn bộ hằng số + đơn vị còn nguyên vẹn.
+   */
   it("should extract math/physics symbols and measurement units", async () => {
     const result = await PdfExtractorService.extractPdfContent(
       readFixture("math-formulas.pdf")
@@ -50,7 +68,13 @@ describe("PDF Text Layer Extraction — các trường hợp bổ sung", () => {
     expect(normalized).toContain("hz");
     expect(normalized).toContain("rad");
   });
-  //kiểm tra trích xuất tất cả 60 câu hỏi từ một PDF lớn.
+
+  /**
+   * Độ phủ số lượng: đề 60 câu phải trích xuất đủ cả 60, không bỏ sót câu cuối.
+   * Đầu vào : large-text.pdf (60 câu hỏi, mỗi câu 4 phương án).
+   * Kỳ vọng : method = PDF_TEXT; có "cau 1:" lẫn "cau 60:"; đếm marker
+   *            "cau N:" được ≥ 60 lần.
+   */
   it("should extract all 60 questions from a large text PDF", async () => {
     const result = await PdfExtractorService.extractPdfContent(
       readFixture("large-text.pdf")
@@ -66,7 +90,13 @@ describe("PDF Text Layer Extraction — các trường hợp bổ sung", () => {
     const questionCount = (normalized.match(/cau \d+:/g) || []).length;
     expect(questionCount).toBeGreaterThanOrEqual(60);
   });
-  // kiểm tra trích xuất các phần câu hỏi và loại câu hỏi.
+
+  /**
+   * Đề có cấu trúc (tiêu đề, phân phần, nhiều loại câu): mọi khối phải được giữ.
+   * Đầu vào : structure-exam.pdf (tiêu đề + PHẦN III trắc nghiệm + câu tự luận).
+   * Kỳ vọng : method = PDF_TEXT; rawText chứa tiêu đề, tiêu mục, câu hỏi lựa chọn
+   *            kèm phương án, và câu hỏi tự luận (công thức chu kỳ).
+   */
   it("should extract structured exam sections and question types", async () => {
     const result = await PdfExtractorService.extractPdfContent(
       readFixture("structure-exam.pdf")
@@ -75,28 +105,38 @@ describe("PDF Text Layer Extraction — các trường hợp bổ sung", () => {
     expect(result.extractionMethod).toBe(extraction_method_t.PDF_TEXT);
 
     const normalized = normalizeText(result.rawText);
-    // Title
+    // Tiêu đề đề thi
     expect(normalized).toContain("de kiem tra hoc ky i - mon vat ly 11");
-    // Multiple choice section
+    // Tiêu mục trắc nghiệm + câu hỏi
     expect(normalized).toContain("phan iii. cau hoi lua chon");
     expect(normalized).toContain("don vi cua tan so la gi");
-    // Options
+    // Phương án A, B
     expect(normalized).toContain("a. giay (s)");
     expect(normalized).toContain("b. hec (hz)");
-    // Short answer question
+    // Câu hỏi tự luận
     expect(normalized).toContain("cau 3: viet cong thuc tinh chu ky");
   });
-  // kiểm tra raw text không có nghĩa khi trang trống.
+
+  /**
+   * Trang trắng: text layer rỗng → hasMeaningfulText phải là false.
+   * Đầu vào : blank-page.pdf (chỉ có lệnh vẽ "BT ET", không chữ).
+   * Kỳ vọng : hasMeaningfulText(raw) = false — tín hiệu đúng cho tầng trên
+   *            quyết định fallback OCR.
+   */
   it("should produce raw text that is not meaningful when page is blank", async () => {
-    // blank-page.pdf có text layer rỗng → ở mức raw text chỉ cần đảm bảo
-    // không có nội dung câu hỏi nào được trích xuất.
     const raw = await PdfExtractorService.extractPdfText(readFixture("blank-page.pdf"));
     expect(PdfExtractorService.hasMeaningfulText(raw)).toBe(false);
   });
 });
 
 describe("Normalization of extracted question text", () => {
-  //kiểm tra xóa dấu câu và số cho việc khớp tương đồng.
+  /**
+   * normalizeQuestionText — fuzzy matching giữa 2 phiên bản cùng câu hỏi.
+   * Đầu vào : câu tiếng Việt có dấu + số lượng ("200g").
+   * Kỳ vọng : output chỉ còn chữ cái ASCII không dấu, không chữ số, không dấu
+   *            câu ("cu  con lc l xo c khi lng g") — dùng để so khớp đề AI
+   *            sinh ra với đề gốc bỏ qua khác biệt dấu/khoảng trắng.
+   */
   it("should strip punctuation and digits for fuzzy matching", () => {
     const source = "Câu 1: Con lắc lò xo có khối lượng 200g";
     const normalized = normalizeQuestionText(source);

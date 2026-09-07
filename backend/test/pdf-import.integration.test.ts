@@ -7,10 +7,23 @@ import PdfExtractorService from "@/services/pdfExtractor.js";
 import PdfImportService from "@/services/pdfImport.js";
 import { UploadExamRepository } from "@/repositories/uploaded_exam.repository.js";
 import { normalizeText } from "./helpers/normalize.js";
-//kiểm tra API và module phối hợp.
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const fixturesDir = path.join(__dirname, "fixtures");
+
+/**
+ * INTEGRATION TESTS — phối hợp 3 tầng: Extract → Save raw text → Generate.
+ * Kiểm tra phối hợp giữa các module (extractor + repository + AI service).
+ *
+ * Đây chính là luồng thật mà PdfImportController thực hiện cho MỖI file upload.
+ * Gemini & UploadExamRepository được mock; extractor chạy THẬT trên fixture PDF.
+ *
+ * Kiểm chứng chính:
+ *   - Raw text lưu vào DB phải BẰNG ĐÚNG raw text extractor trả ra (toàn vẹn).
+ *   - extractionMethod (PDF_TEXT/OCR) ghi đúng theo luồng thực tế.
+ *   - KHÔNG save khi extract thất bại; lỗi AI sau khi save được lan truyền.
+ */
 
 function readFixture(name: string): Buffer {
   return fs.readFileSync(path.join(fixturesDir, name));
@@ -27,6 +40,7 @@ vi.mock("@/repositories/uploaded_exam.repository.js", () => ({
   UploadExamRepository: { saveRawText: (...a: unknown[]) => mockSaveRawText(...a) },
 }));
 
+// Response AI "chuẩn" dùng chung cho các test sinh đề
 function validAssignment() {
   return {
     title: "Đề kiểm tra Vật lý 11",
@@ -49,7 +63,8 @@ function validAssignment() {
   };
 }
 
-// Returns the args of the nth saveRawText call, throwing if it never happened.
+// Trả về tham số của lần gọi saveRawText thứ n; throw nếu chưa từng gọi
+// (giúp lỗi "quên save" fail rõ ràng thay vì lỗi undefined khó hiểu).
 function savedCall(index = 0): unknown[] {
   const call = mockSaveRawText.mock.calls[index];
   if (!call) throw new Error(`saveRawText was not called ${index + 1} time(s)`);
@@ -63,7 +78,12 @@ describe("Integration — Extract → Save raw text → Generate assignment", ()
     mockSaveRawText.mockResolvedValue({ id: 1 });
   });
 
-  // ── PDF có text layer ───────────────────────────────────────────────────
+  // ── Luồng 1: PDF có text layer ─────────────────────────────────────────
+  /**
+   * Luồng chuẩn PDF_TEXT: extract thật từ text-layer.pdf → save đủ 6 tham số
+   * ĐÚNG GIÁ TRỊ (rawText, userId, fileName, fileSize, mimeType, method) →
+   * sinh đề thành công từ chính rawText đã extract.
+   */
   it("should extract, save raw text with PDF_TEXT method, and generate an assignment", async () => {
     const pdfBuffer = readFixture("text-layer.pdf");
     mockGenerateContent.mockResolvedValue({ text: JSON.stringify(validAssignment()) });
@@ -98,7 +118,12 @@ describe("Integration — Extract → Save raw text → Generate assignment", ()
     expect(assignment.questions).toHaveLength(1);
   });
 
-  // ── PDF không có text layer (scanned) ──────────────────────────────────
+  // ── Luồng 2: PDF không có text layer (scanned) ─────────────────────────
+  /**
+   * Luồng OCR: scanned.pdf không có text layer → extract rơi xuống OCR →
+   * save với method = OCR → sinh đề từ rawText OCR.
+   * Timeout 60s vì OCR chạy thật.
+   */
   it("should extract via OCR, save raw text with OCR method, and generate an assignment", async () => {
     const pdfBuffer = readFixture("scanned.pdf");
     mockGenerateContent.mockResolvedValue({ text: JSON.stringify(validAssignment()) });
@@ -124,7 +149,11 @@ describe("Integration — Extract → Save raw text → Generate assignment", ()
     expect(assignment.questions[0].type).toBe("SINGLE_CHOICE");
   }, 60_000);
 
-  // ── Real-world exam PDF ─────────────────────────────────────────────────
+  // ── Luồng 3: Đề thi thật ───────────────────────────────────────────────
+  /**
+   * Đề Hàn Thuyên thật (255 KB): extract ra nội dung có "câu 1" và raw text đó
+   * phải sinh được assignment (mô phỏng đúng luồng "tạo lại đề từ đề đã upload").
+   */
   it("should extract the real-world exam and generate an assignment from its raw text", async () => {
     const pdfBuffer = readFixture("1. Hàn Thuyên - Bắc Ninh-1.pdf");
     mockGenerateContent.mockResolvedValue({ text: JSON.stringify(validAssignment()) });
@@ -139,7 +168,11 @@ describe("Integration — Extract → Save raw text → Generate assignment", ()
     expect(assignment.questions).toBeDefined();//tức ktra khác null/underfine là pass
   });
 
-  // ── Raw text content quality check ──────────────────────────────────────
+  // ── Kiểm tra toàn vẹn raw text đã lưu ──────────────────────────────────
+  /**
+   * Raw text LƯU VÀO REPO phải giữ được nội dung đề gốc (structure-exam.pdf):
+   * tiêu đề "DE KIEM TRA HOC KY I" và câu 5 vẫn hiện diện sau khi save.
+   */
   it("should ensure raw text saved to the repository equals what was extracted", async () => {
     const pdfBuffer = readFixture("structure-exam.pdf");
     mockGenerateContent.mockResolvedValue({ text: JSON.stringify(validAssignment()) });
@@ -161,7 +194,11 @@ describe("Integration — Extract → Save raw text → Generate assignment", ()
     expect(normalizeText(String(saved[0]))).toContain("cau 5");
   });
 
-  // ── Failure: AI invalid JSON ────────────────────────────────────────────
+  // ── Lỗi: AI trả JSON hỏng sau khi save ─────────────────────────────────
+  /**
+   * Save thành công nhưng AI trả JSON hỏng → lỗi phải lan truyền (không nuốt).
+   * Raw text vẫn đã lưu an toàn — dữ liệu upload không mất dù AI lỗi.
+   */
   it("should propagate failure when the AI returns invalid JSON after saving", async () => {
     const pdfBuffer = readFixture("text-layer.pdf");
     mockGenerateContent.mockResolvedValue({ text: "not-json" });
@@ -183,7 +220,11 @@ describe("Integration — Extract → Save raw text → Generate assignment", ()
     ).rejects.toThrow("Gemini returned invalid JSON");
   });
 
-  // ── Failure: no extractable text ────────────────────────────────────────
+  // ── Lỗi: không đọc được nội dung ───────────────────────────────────────
+  /**
+   * Extract từ corrupted.pdf ném lỗi → KHÔNG ĐƯỢC save raw text rác vào DB
+   * (save chỉ xảy ra sau khi extract thành công).
+   */
   it("should throw before saving when extraction yields no readable content", async () => {
     const emptyBuffer = readFixture("corrupted.pdf");
 

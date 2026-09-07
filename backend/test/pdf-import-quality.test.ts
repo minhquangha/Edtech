@@ -11,8 +11,24 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const fixturesDir = path.join(__dirname, "fixtures");
 
+/**
+ * QUALITY TESTS — đánh giá CHẤT LƯỢNG đầu ra của pipeline trích xuất + AI
+ * theo các tiêu chí đo lường được (không chỉ pass/fail):
+ *
+ *   1. Question density — raw text phải giữ được mật độ câu hỏi của đề gốc
+ *   2. Schema validity  — assignment sinh ra phải qua quality gate (type, level,
+ *                          đúng 1 đáp án đúng với SINGLE_CHOICE, Đúng/Sai với TRUE_FALSE...)
+ *   3. Type diversity   — AI phải giữ được đa dạng loại câu hỏi của đề mẫu
+ *   4. Topic relevance  — từ khóa chủ đề (con lắc lò xo, tần số...) phải sống sót
+ *   5. Hygiene          — không đưa text rỗng cho AI; không nhiễm marker pdf-parse
+ *
+ * Gemini được mock bằng "mô hình ghi chép trung thực" (mockAiExtractFromRawText):
+ * sinh đề bám sát cấu trúc raw text → chạy offline, deterministic, vẫn đo được
+ * chất lượng đầu ra ở tầng schema.
+ */
+
 function readFixture(name: string): Buffer {
-  return fs.readFileSync(path.join(fixturesDir, name));
+  return fs.readFileSync(path.join(__dirname, "fixtures", name));
 }
 
 const mockGenerateContent = vi.fn();
@@ -22,9 +38,9 @@ vi.mock("@/config/gemini.js", () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Quality gate: the assignment schema constraints that the AI prompt must
-// satisfy (same rules as buildPrompt: type enums, cognitive levels, single
-// correct answer for SINGLE_CHOICE, Đúng/Sai options for TRUE_FALSE...).
+// Quality gate: các ràng buộc schema mà đề sinh ra phải thỏa (cùng luật với
+// buildPrompt: enum type, enum cognitive level, SINGLE_CHOICE đúng 1 đáp án
+// đúng, TRUE_FALSE phải có Đúng/Sai...).
 // ---------------------------------------------------------------------------
 type Question = {
   content: string;
@@ -81,15 +97,17 @@ function validateAssignmentSchema(assignment: Assignment): string[] {
   return errors;
 }
 
-// Faithful transcription model: given the raw text extracted from the PDF,
-// produce an assignment whose structure mirrors the source exam. This stands
-// in for Gemini so the quality pipeline can run offline and deterministically.
-// The detection regexes accept both ASCII (fixture-generated PDFs) and
-// Vietnamese-diacritic forms (real-world PDFs / OCR output).
+/**
+ * Mô hình "ghi chép trung thực": từ raw text đã trích xuất, sinh đề có cấu
+ * trúc phản chiếu đề gốc. Thay thế Gemini để pipeline quality chạy offline
+ * và deterministic. Regex nhận diện chấp nhận cả dạng ASCII (fixture sinh
+ * sẵn) lẫn tiếng Việt có dấu (đề thật / kết quả OCR).
+ */
 function mockAiExtractFromRawText(rawText: string): Assignment {
   const normalized = normalizeText(rawText);
   const questions: Question[] = [];
 
+  // Nhận diện từng loại câu hỏi trong raw text của đề gốc
   const hasTrueFalse = /a\.?\s*(?:đúng|dung)\s*b\.?\s*sai/.test(normalized);
   const hasShortAnswer = /(?:câu|cau) \d+: (?:viet cong thuc|tinh chu ky|cong thuc tinh)/.test(
     normalized
@@ -99,6 +117,7 @@ function mockAiExtractFromRawText(rawText: string): Assignment {
       normalized
     );
 
+  // Đúng/Sai → sinh câu TRUE_FALSE đúng chuẩn (Đúng/Sai)
   if (hasTrueFalse) {
     questions.push({
       content: "Dao động điều hòa là dao động có li độ là hàm sin hoặc cosin theo thời gian.",
@@ -112,6 +131,7 @@ function mockAiExtractFromRawText(rawText: string): Assignment {
     });
   }
 
+  // Câu tự luận công thức → sinh SHORT_ANSWER (không có phương án)
   if (hasShortAnswer) {
     questions.push({
       content: "Viết công thức tính chu kỳ của con lắc đơn và giải thích các đại lượng trong công thức.",
@@ -122,6 +142,7 @@ function mockAiExtractFromRawText(rawText: string): Assignment {
     });
   }
 
+  // Câu trắc nghiệm → sinh 2 câu SINGLE_CHOICE (NB + VD) đủ 4 phương án
   if (hasSingleChoice) {
     questions.push({
       content: "Đơn vị của tần số dao động là gì?",
@@ -149,6 +170,7 @@ function mockAiExtractFromRawText(rawText: string): Assignment {
     });
   }
 
+  // Fallback: không nhận diện được loại nào → trả 1 câu tổng hợp (không rỗng)
   if (questions.length === 0) {
     questions.push({
       content: "Câu hỏi tổng hợp từ đề mẫu được trích xuất.",
@@ -162,6 +184,7 @@ function mockAiExtractFromRawText(rawText: string): Assignment {
     });
   }
 
+  // Lấy dòng đầu tiên của raw text làm tiêu đề đề
   const titleLine = rawText.split("\n").find((l) => l.trim().length > 0) ?? "Đề kiểm tra mới";
   return {
     title: titleLine.trim(),
@@ -174,8 +197,7 @@ function mockAiExtractFromRawText(rawText: string): Assignment {
 }
 
 // ---------------------------------------------------------------------------
-// Source-text quality helpers — score how faithfully the raw text retains the
-// structure of the source exam (question density, options, title).
+// Quality helpers — đo độ trung thực của raw text so với đề gốc
 // ---------------------------------------------------------------------------
 //đếm dấu hiệu nhận bt câu hỏi
 function countQuestionMarkers(text: string): number {
@@ -188,6 +210,11 @@ describe("Quality — extraction từ PDF có text layer", () => {
     mockGenerateContent.mockReset();
   });
 
+  /**
+   * Mật độ câu hỏi: đề thật gồm 2 phần (câu 1–11 và 12–23) — extract phải
+   * bắt được ≥ 10 marker "câu N:" mỗi phần, và các phương án A–D phải nhận
+   * diện được trong toàn bộ raw text.
+   */
   it("should retain high question density from the real-world exam raw text", async () => {
     // The exam is delivered as two PDF parts (questions 1–11 and 12–23);
     // extraction must surface a question marker for every question.
@@ -213,6 +240,10 @@ describe("Quality — extraction từ PDF có text layer", () => {
     expect(normalized).toMatch(/d\./);
   });
 
+  /**
+   * Schema validity (luồng text layer): đề sinh từ raw text structure-exam.pdf
+   * phải qua quality gate KHÔNG lỗi nào, và có ≥ 3 câu hỏi.
+   */
   it("should generate a schema-valid assignment from a text-layer source", async () => {
     const extraction = await PdfExtractorService.extractPdfContent(
       readFixture("structure-exam.pdf")
@@ -232,6 +263,10 @@ describe("Quality — extraction từ PDF có text layer", () => {
     expect(assignment.questions.length).toBeGreaterThanOrEqual(3);
   });
 
+  /**
+   * Đa dạng loại câu hỏi: đề gốc có đủ TRUE_FALSE + SHORT_ANSWER + SINGLE_CHOICE
+   * → đề sinh ra phải giữ cả 3 loại, không bị thu gọn về 1 loại.
+   */
   it("should let the AI keep question-type diversity of the source", async () => {
     const extraction = await PdfExtractorService.extractPdfContent(
       readFixture("structure-exam.pdf")
@@ -250,6 +285,10 @@ describe("Quality — extraction từ PDF có text layer", () => {
     expect(types).toContain("SINGLE_CHOICE");
   });
 
+  /**
+   * Relevance gate: từ khóa chủ đề vật lý của đề gốc phải nguyên vẹn sau
+   * extract — nếu mất, prompt AI sẽ không biết đề nói về gì.
+   */
   it("should preserve topic keywords through extraction (relevance gate)", async () => {
     const extraction = await PdfExtractorService.extractPdfContent(
       readFixture("structure-exam.pdf")
@@ -268,6 +307,11 @@ describe("Quality — extraction từ PDF scan (OCR)", () => {
     mockGenerateContent.mockReset();
   });
 
+  /**
+   * Khối lượng text OCR: đề scan thật test1.pdf phải OCR ra > 200 ký tự
+   * và giữ được từ khóa nhận dạng "con lắc lò xo".
+   * Timeout 120s vì OCR thật.
+   */
   it("should OCR a real scanned exam with sufficient text volume", async () => {
     const extraction = await PdfExtractorService.extractPdfContent(
       readFixture("test1.pdf")
@@ -279,6 +323,11 @@ describe("Quality — extraction từ PDF scan (OCR)", () => {
     expect(normalized).toContain("con lắc lò xo");
   }, 120_000);
 
+  /**
+   * Schema validity (luồng OCR): raw text OCR nhiều nhiễu hơn vẫn phải sinh
+   * được assignment hợp lệ schema, không rỗng câu hỏi.
+   * Timeout 120s vì OCR thật.
+   */
   it("should generate a schema-valid assignment from OCR raw text", async () => {
     const extraction = await PdfExtractorService.extractPdfContent(
       readFixture("test1.pdf")
@@ -297,6 +346,11 @@ describe("Quality — extraction từ PDF scan (OCR)", () => {
 });
 
 describe("Quality — chung cho cả hai luồng trích xuất", () => {
+  /**
+   * Vệ sinh đầu vào: bất kể luồng nào (text layer hay OCR), raw text đưa cho
+   * AI đều KHÔNG ĐƯỢC rỗng.
+   * Timeout 120s vì có OCR thật (test1.pdf).
+   */
   it("should never hand empty text to the AI for either extraction path", async () => {
     const textPdf = await PdfExtractorService.extractPdfContent(
       readFixture("1. Hàn Thuyên - Bắc Ninh-1.pdf")
@@ -309,6 +363,10 @@ describe("Quality — chung cho cả hai luồng trích xuất", () => {
     expect(scanPdf.rawText.trim().length).toBeGreaterThan(0);
   }, 120_000);
 
+  /**
+   * Nhiễu parser: marker pdf-parse (-- N of M --) chỉ được chiếm < 1% raw text
+   * (text dài gấp 100 lần số marker) — đảm bảo raw text là nội dung thật.
+   */
   it("should keep the extracted raw text free of parser noise markers", async () => {
     const textPdf = await PdfExtractorService.extractPdfContent(
       readFixture("1. Hàn Thuyên - Bắc Ninh-1.pdf")
@@ -320,6 +378,10 @@ describe("Quality — chung cho cả hai luồng trích xuất", () => {
     expect(textLength).toBeGreaterThan(markerCount * 100);
   });
 
+  /**
+   * Quality gate phải CHẶN đề hỏng: thiếu field, type lạ, level lạ...
+   * (test này xác nhận validator bắt được ≥ 4 lỗi trên assignment cố tình sai).
+   */
   it("should reject an assignment that fails the schema quality gate", async () => {
     // A bad AI response (no questions, invalid type) must be caught by the
     // schema validator used for quality control.
