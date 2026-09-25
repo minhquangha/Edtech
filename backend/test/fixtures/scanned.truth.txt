@@ -1,0 +1,8 @@
+ĐỀ VẬT LÝ HÀN THUYỀN - BẮC NINH 2022-2023
+Câu 1: Con lắc lò xo gồm vật có khối lượng m và lò xo có độ cứng k = 100N/m. Vật thực hiện được 10 dao động trong 5(s). Lấy π² = 10, khối lượng m của vật là
+A. 1kg B. 500 g. C. 625g. D. 50g.
+Câu 2: Điều nào sau đây là đúng khi nói về sự giao thoa sóng?
+A. Tại những điểm mặt nước không dao động, hiệu đường đi của hai sóng bằng một số nguyên lần của bước sóng
+B. Quỹ tích những điểm có biên độ cực đại là một hyperbol.
+C. Điều kiện để có giao thoa là các sóng phải là các sóng kết hợp nghĩa là chúng phải có cùng phương dao động, cùng tần số và có hiệu số pha không đổi theo thời gian.
+D. Giao thoa là sự tổng hợp của hai hay nhiều sóng trong không gian.

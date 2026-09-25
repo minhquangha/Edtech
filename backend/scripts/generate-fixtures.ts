@@ -6,9 +6,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const fixturesDir = path.join(__dirname, "../test/fixtures");
 
-if (!fs.existsSync(fixturesDir)) {
-  fs.mkdirSync(fixturesDir, { recursive: true });
+
+
+export function generateTestFixtures() {
+  if (!fs.existsSync(fixturesDir)) {
+    fs.mkdirSync(fixturesDir, { recursive: true });
+  }
+  fs.writeFileSync(path.join(fixturesDir, "text-layer.pdf"), Buffer.from(textLayerPdf));
+  fs.writeFileSync(path.join(fixturesDir, "scanned.pdf"), Buffer.from(scannedPdf));
 }
+
 
 // 1. PDF with real text layer
 const textLayerPdfStream = `BT

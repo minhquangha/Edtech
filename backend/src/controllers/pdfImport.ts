@@ -3,7 +3,7 @@ import { UploadExamRepository } from "@/repositories/uploaded_exam.repository.js
 import PdfImportService from "@/services/pdfImport.js";
 import PdfExtractorService from "@/services/pdfExtractor.js";
 import type { AssignmentRequest } from "@/types/assignments.js";
-import { extraction_method_t } from "@prisma/client";
+
 const MAX_FILES = 5;
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
@@ -47,13 +47,21 @@ const PdfImportController = {
 
       // 1. Validate uploaded files
       const validationError = validateUploadedFiles(files);
-
       if (validationError) {
         return res.status(400).json({
           message: validationError,
         });
       }
-      
+
+      const {
+        title,
+        description,
+        subject,
+        class_level,
+        duration_minutes,
+        extra_requirements,
+      } = req.body || {};
+
       // 2. Extract text from PDFs
       const parsedFiles: ParsedPdfFile[] = [];
 
@@ -77,22 +85,26 @@ const PdfImportController = {
             file.originalname,
             file.size,
             file.mimetype,
-            extraction_method,
+            extraction_method
           );
-          console.log("Đã lưu ");
         } catch (error) {
           console.error(`PDF parse error for ${file.originalname}:`, error);
-
           return res.status(400).json({
             message: `Không thể đọc nội dung file "${file.originalname}"`,
           });
         }
       }
 
-      // 3. Send extracted text to AI service
+      // 3. Send extracted text AND form metadata to AI service (Fix Bug C2!)
       const assignment: AssignmentRequest =
         await PdfImportService.generateFromPdfs({
           files: parsedFiles,
+          title,
+          description,
+          subject,
+          classLevel: class_level,
+          durationMinutes: duration_minutes ? Number(duration_minutes) : undefined,
+          extraRequirements: extra_requirements,
         });
 
       // 4. Return generated assignment

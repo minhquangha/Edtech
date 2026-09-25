@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { UserRepository } from "@/repositories/user.repository.js";
+import { BadRequestError, UnauthorizedError } from "@/utils/errors.js";
 
 const UserService = {
   register: async (username: string, password: string) => {
@@ -8,7 +9,7 @@ const UserService = {
     const existingUser = await UserRepository.findByUsername(username);
 
     if (existingUser) {
-      throw new Error("Username already exists");
+      throw new BadRequestError("Username already exists");
     }
 
     // 2. Hash mật khẩu
@@ -28,17 +29,22 @@ const UserService = {
     const user = await UserRepository.findByUsername(username);
 
     if (!user) {
-      throw new Error("Invalid username or password");
+      throw new UnauthorizedError("Invalid username or password");
     }
 
     // 2. Kiểm tra password 
     const isPasswordCorrect = await bcrypt.compare(
       password,
-      user.password,
+      user.password
     );
 
     if (!isPasswordCorrect) {
-      throw new Error("Invalid username or password");
+      throw new UnauthorizedError("Invalid username or password");
+    }
+
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+      throw new Error("JWT_SECRET environment variable is missing");
     }
 
     // 3. Tạo JWT
@@ -48,10 +54,10 @@ const UserService = {
         username: user.username,
         role: user.role,
       },
-      process.env.JWT_SECRET as string,
+      secret,
       {
         expiresIn: "1d",
-      },
+      }
     );
 
     return {

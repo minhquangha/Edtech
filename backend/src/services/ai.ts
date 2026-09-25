@@ -1,8 +1,6 @@
 import type { AiRequest } from "@/types/ai-service.js";
 import type { AssignmentRequest, CognitiveLevel, QuestionType } from "@/types/assignments.js";
-
-import gemini from "@/config/gemini.js";
-import { assignmentAiSchema } from "@/types/ai-service.js";
+import { generateAssignmentContent } from "@/services/aiProvider.js";
 import { LessonRepository } from "@/repositories/lesson.repository.js";
 interface GeminiQuestionAnswer {
   content: string;
@@ -174,38 +172,62 @@ GENERATION RULES
 ========================
 
 1. Generate exactly ${totalQuestions} questions.
-2. Follow the group distribution exactly.
-3. Questions must come only from the provided lesson content.
-4. Do not use external knowledge.
-5. Every question must include a cognitive_level field and it must be exactly one of NB, TH, or VD.
-6. Distribute questions according to the group cognitive levels.
-7. Do not generate duplicate questions.
-8. SINGLE_CHOICE and MULTIPLE_CHOICE must have answers.
-9. TRUE_FALSE must have answer as true/false and answers as [].
-10. SHORT_ANSWER must have answer string and answers as [].
-11. Format all mathematical expressions, chemical formulas, and scientific notations using standard LaTeX syntax (e.g., use \\( ... \\) for inline formulas and \\[ ... \\] for display math equations). Ensure plain text and formulas are cleanly formatted.
-12. Do not include any extra fields.
-13. Return only JSON.
+2. Follow the group distribution exactly (match count, difficulty/cognitive_level, and question_type of each group).
+3. Questions must come only from the provided lesson content. Do not use external knowledge or unintroduced topics.
+4. NUMERICAL ORIGINALITY & VARIATION (CHỐNG SAO CHÉP NGUYÊN VĂN BÀI TẬP VÍ DỤ):
+   - When generating calculation questions based on example exercises, sample problems, or textbook scenarios in the source lesson, ABSOLUTELY DO NOT copy the exact numbers or verbatim wording from the lesson examples (e.g. if the lesson has an example with V1 = 100 cm³, T1 = 27 °C, p1 = 10⁵ Pa, YOU MUST alter the numerical parameters to fresh, realistic values such as V1 = 150 cm³, T1 = 30 °C, etc., or swap the knowns and unknowns).
+   - Ensure the new numbers are physically meaningful, realistic for the educational grade level, and lead to clean numerical calculations.
+
+=========================================
+COGNITIVE LEVEL GUIDELINES (STRICT COMPLIANCE)
+=========================================
+For each question, the 'cognitive_level' field MUST be exactly one of "NB", "TH", or "VD", conforming strictly to the pedagogical definitions below:
+
+- NB (Nhận biết / Recognition & Recall):
+  + The question must ONLY test direct memory, recall, or recognition of definitions, concepts, scientific laws, units of measurement, or formulas stated VERBATIM in the source lesson.
+  + ABSOLUTELY NO numerical calculations, no formula manipulation, and no multi-step reasoning.
+  + Typical question patterns: "Nêu...", "Phát biểu...", "Công thức nào sau đây...", "Đơn vị của [đại lượng] là gì?", "Theo bài học, đặc điểm nào sau đây...".
+
+- TH (Thông hiểu / Comprehension & Explanation):
+  + The question must require understanding the underlying physical/scientific principles, explaining causes/effects of phenomena ("Vì sao...", "Tại sao..."), comparing/contrasting concepts, or interpreting simple diagrams/graphs.
+  + Calculation constraint: If a numerical calculation is required, it MUST BE AT MOST 1 SIMPLE STEP (direct substitution of given values into a single basic formula, e.g., substituting into \\(V_1/T_1 = V_2/T_2\\) after converting Celsius to Kelvin).
+  + DO NOT label 1-step substitution questions as VD.
+  + DO NOT label pure formula recall or definition recall questions as TH (those must be NB).
+  + STRICT RESTRICTION FOR TH GROUPS: When a question group specifies difficulty 'TH', ABSOLUTELY DO NOT generate questions that only ask students to recall a verbatim fact, factor, or definition from the lesson (e.g. asking "the constant depends on which factor" or "what is the value of R" is pure recall NB and MUST NOT appear in a TH group). Questions in a TH group MUST genuinely require explanation ("Vì sao..."), comparison between two states, or a 1-step calculation.
+
+- VD (Vận dụng / Application & Multi-step Solving):
+  + The question must require logical synthesis, combining 2 or more calculation steps / 2 or more distinct formulas (e.g. calculating volume from density \\(V = m/\\rho\\) first, then applying the ideal gas law; or solving a system of equations).
+  + May involve complex unit conversions or applying knowledge to unfamiliar real-world problem scenarios not described verbatim in the lessons.
+
+=========================================
+DISTRACTOR QUALITY RULES (FOR MULTIPLE CHOICE) - STRICT PEDAGOGICAL STANDARDS
+=========================================
+- For SINGLE_CHOICE and MULTIPLE_CHOICE: All incorrect options (distractors) must be HIGHLY PLAUSIBLE and constructed around real, specific student misconceptions and typical procedural errors:
+  + Calculation distractors: MUST be derived from specific common errors (e.g. forgetting to convert Celsius to Kelvin T = t + 273, inverting formula ratios such as V1/V2 instead of V2/V1, omitting square roots, sign confusion in work/heat formulas ΔU = A + Q, or decimal place/unit prefix errors).
+  + Conceptual/theoretical distractors ("Vì sao...", "Tại sao...", "Nhận định nào sau đây đúng/sai..."): MUST be credible, grammatically coherent statements written with formal scientific terminology. They must sound persuasive to a student with incomplete understanding (e.g. confusing macroscopic temperature with microscopic molecular kinetic energy, confusing volume expansion with mass change).
+- ABSOLUTELY NO obviously absurd, comical, or trivially eliminable options (e.g. "phân tử biến mất", "thể tích trở về 0", or bringing up unrelated phenomena). Every option must be a serious academic choice.
+- EQUAL LENGTH AND COMPLEXITY: All options must have comparable length, linguistic complexity, and grammatical structure. The correct answer must NOT be noticeably longer or more detailed than the distractors.
+- For formula or unit questions: Distractors MUST have the exact same structural representation, mathematical symbols, or units as the correct answer (e.g. inverted fractions, alternative plausible variables from the same lesson).
+- ABSOLUTELY NO two options that carry the exact same meaning (e.g. "càng giảm" and "càng chậm").
+- Ensure exactly 1 unambiguously correct option for SINGLE_CHOICE.
+
+=========================================
+QUESTION TYPE FORMAT RULES
+=========================================
+4. SINGLE_CHOICE: Must have 'answers' array with at least 2 options, exactly 1 having isCorrect = true.
+5. MULTIPLE_CHOICE: Must have 'answers' array with at least 2 options, at least 1 having isCorrect = true.
+6. TRUE_FALSE: Must have 'answer' as "true" or "false", and 'answers' as [].
+7. SHORT_ANSWER: Must have 'answer' containing the concise final answer string (e.g. "10 L" or "25"), and 'answers' as [].
+8. Do not generate duplicate or near-duplicate questions.
+9. Format all mathematical expressions, chemical formulas, and scientific notations using standard LaTeX syntax (e.g., use \\( ... \\) for inline formulas and \\[ ... \\] for display math equations). Ensure plain text and formulas are cleanly formatted.
+10. Do not include any extra fields beyond the schema.
+11. Return only JSON.
 
 Generate the assignment now.
 `;
 
-      const response = await gemini.models.generateContent({
-        model: process.env.MODEL || "gemini-3.6-flash",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: assignmentAiSchema,
-        },
-      });
-
-
-
-      if (!response.text) {
-        throw new Error("Gemini returned an empty response");
-      }
-
-      const raw = JSON.parse(response.text) as GeminiAssignmentResponse;
+      const jsonText = await generateAssignmentContent(prompt);
+      const raw = JSON.parse(jsonText) as GeminiAssignmentResponse;
       const normalized: AssignmentRequest = {
         title: raw.title,
         description: raw.description,

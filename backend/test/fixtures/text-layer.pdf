@@ -9,20 +9,32 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
 endobj
 4 0 obj
-<< /Length 173 >>
+<< /Length 581 >>
 stream
 BT
-/F1 14 Tf
-50 700 Td
-(Cau 1: De thi kiem tra mau) Tj
+/F1 12 Tf
+50 720 Td
+(DE THI KIEM TRA VAT LY 12) Tj
 0 -30 Td
-(A. Phuong an A) Tj
+(Cau 1: Mot vat dao dong dieu hoa theo phuong trinh x = A cos\(omega t + phi\). Dai luong omega duoc goi la) Tj
 0 -20 Td
-(B. Phuong an B) Tj
+(A. tan so goc cua dao dong.) Tj
 0 -20 Td
-(C. Phuong an C) Tj
+(B. chu ki cua dao dong.) Tj
 0 -20 Td
-(D. Phuong an D) Tj
+(C. tan so cua dao dong.) Tj
+0 -20 Td
+(D. pha ban dau cua dao dong.) Tj
+0 -30 Td
+(Cau 2: Trong qua trinh dang nhiet cua mot luong khi li tuong, neu ap suat tang 2 lan thi the tich cua khoi khi se) Tj
+0 -20 Td
+(A. giam 2 lan.) Tj
+0 -20 Td
+(B. tang 2 lan.) Tj
+0 -20 Td
+(C. khong doi.) Tj
+0 -20 Td
+(D. tang 4 lan.) Tj
 ET
 endstream
 endobj
@@ -36,9 +48,9 @@ xref
 0000000060 00000 n 
 0000000117 00000 n 
 0000000244 00000 n 
-0000000450 00000 n 
+0000000850 00000 n 
 trailer
 << /Size 6 /Root 1 0 R >>
 startxref
-520
+950
 %%EOF

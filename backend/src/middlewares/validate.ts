@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
-import { ZodError, type ZodSchema } from "zod";
+import { ZodError, ZodType
+ } from "zod";
 import { pdfImportFormSchema } from "@/schemas/index.js";
 
 const MAX_FILES = 5;
@@ -15,7 +16,7 @@ function formatZodErrors(error: ZodError) {
 /**
  * Middleware factory for validating req.body against a Zod schema
  */
-export const validateBody = (schema: ZodSchema) => {
+export const validateBody = (schema: ZodType) => {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
       req.body = schema.parse(req.body);
@@ -37,7 +38,7 @@ export const validateBody = (schema: ZodSchema) => {
 /**
  * Middleware factory for validating req.query against a Zod schema
  */
-export const validateQuery = (schema: ZodSchema) => {
+export const validateQuery = (schema: ZodType) => {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
       const parsed = schema.parse(req.query);
@@ -64,7 +65,7 @@ export const validateQuery = (schema: ZodSchema) => {
 /**
  * Middleware factory for validating req.params against a Zod schema
  */
-export const validateParams = (schema: ZodSchema) => {
+export const validateParams = (schema: ZodType) => {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
       const parsed = schema.parse(req.params);

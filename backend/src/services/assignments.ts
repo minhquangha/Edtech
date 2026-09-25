@@ -70,6 +70,7 @@ const AssignmentService = {
       title: assignmentData.title,
       ...(assignmentData.description ? { description: assignmentData.description } : {}),
       duration_minutes: assignmentData.duration_minutes,
+      status: assignmentData.status,
       teacher_id: assignmentData.teacher_id,
       subject: firstLesson?.subject?.subject ?? "",
       class_level: String(firstLesson?.grade?.grade ?? ""),

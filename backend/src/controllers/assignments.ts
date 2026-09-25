@@ -5,214 +5,166 @@ import {
   type AssignmentUpdateRequest,
 } from "@/types/assignments.js";
 import AssignmentService from "@/services/assignments.js";
+import {
+  BadRequestError,
+  UnauthorizedError,
+  ForbiddenError,
+  NotFoundError,
+} from "@/utils/errors.js";
 
 const AssignmentController = {
-  create: async (req: Request, res: Response) => {// tạo bài tập(phải có quyền teacher)
-    try {
-      const assignmentReq: AssignmentRequest = req.body;
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      const teacherId = req.user.id;
-      const assignment: Assignment = await AssignmentService.create(
-        assignmentReq,
-        teacherId,
+  create: async (req: Request, res: Response) => {
+    const assignmentReq: AssignmentRequest = req.body;
+    if (!req.user) {
+      throw new UnauthorizedError("Authentication required");
+    }
+    const teacherId = req.user.id;
+    const assignment: Assignment = await AssignmentService.create(
+      assignmentReq,
+      teacherId
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: "Create assignment successfully",
+      data: assignment,
+    });
+  },
+
+  getById: async (req: Request, res: Response) => {
+    const assignmentId = Number(req.params.id);
+
+    if (Number.isNaN(assignmentId)) {
+      throw new BadRequestError("Invalid assignment id");
+    }
+
+    const assignment = await AssignmentService.getById(assignmentId);
+
+    if (!assignment) {
+      throw new NotFoundError("Assignment not found");
+    }
+
+    // IDOR Protection: If requester is not the teacher who created it, only allow viewing if PUBLISHED
+    if (
+      req.user &&
+      req.user.id !== assignment.teacher_id &&
+      req.user.role !== "ADMIN" &&
+      assignment.status === "DRAFT"
+    ) {
+      throw new ForbiddenError(
+        "You do not have permission to view this draft assignment"
       );
-
-      return res.status(201).json({
-        message: "Create assignment successfully",
-        data: assignment,
-      });
-    } catch (error) {
-      console.error(error);
-
-      return res.status(500).json({
-        message: "Internal server error",
-      });
     }
-  },
-  getById: async (req: Request, res: Response) => {// lấy ra bài tập theo id
-    try {
-      const assignmentId = Number(req.params.id);
 
-      if (Number.isNaN(assignmentId)) {
-        return res.status(400).json({
-          message: "Invalid assignment id",
-        });
-      }
-
-      const assignment = await AssignmentService.getById(assignmentId);
-
-      if (!assignment) {
-        return res.status(404).json({
-          message: "Assignment not found",
-        });
-      }
-
-      return res.status(200).json({
-        message: "Get assignment successfully",
-        data: assignment,
-      });
-    } catch (error) {
-      console.error(error);
-
-      return res.status(500).json({
-        message: "Internal server error",
-      });
-    }
-  },
-  getByUserId: async (req: Request, res: Response) => { //lấy ra bài tập đã tạo(phải có quyền teacher)
-    // const userId  =  req.user?.id;
-    try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      const userId = req.user.id;
-      const assignment = await AssignmentService.getByTeacherId(userId);
-      return res.status(200).json({
-        message: "Get assignments successfully",
-        data: assignment,
-      });
-    } catch (error) {
-      console.error(error);
-
-      return res.status(500).json({
-        message: "Internal server error",
-      });
-    }
-  },
-  update: async (req: Request, res: Response) => { // Cập nhật bài tập dc AI tạo
-    try {
-      const assignmentId = Number(req.params.id);
-      if (isNaN(assignmentId)) {
-        return res.status(400).json({ message: "Invalid assignment ID" });
-      }
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      const teacherId = req.user.id;
-
-      const assignment: AssignmentUpdateRequest = req.body;
-
-      await AssignmentService.updateAssignment(
-        assignmentId,
-        teacherId,
-        assignment,
-      );
-
-      return res.status(200).json({
-        message: "Assignment updated successfully",
-      });
-    } catch (error: unknown) {
-      console.error("Update assignment error:", error);
-      const errMsg = (error as Error).message || "";
-      if (errMsg.includes("not found") || errMsg.includes("permission")) {
-        return res.status(404).json({ message: errMsg });
-      }
-
-      return res.status(500).json({
-        message: "Failed to update assignment",
-        error: errMsg,
-      });
-    }
-  },
-  deleteById: async (req: Request, res: Response) => {// xóa bài tập
-    try {
-      const assignmentId = Number(req.params.id);
-
-      // Giả sử authenticate middleware
-      // đã gắn user vào request
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      const teacherId = req.user.id;
-
-      if (Number.isNaN(assignmentId)) {
-        return res.status(400).json({
-          message: "Invalid assignment id",
-        });
-      }
-
-      await AssignmentService.deleteById(assignmentId, teacherId);
-
-      return res.status(200).json({
-        message: "Assignment deleted successfully",
-      });
-    } catch (error) {
-      console.error("Delete assignment controller error:", error);
-
-      return res.status(500).json({
-        message: "Internal server error",
-      });
-    }
+    return res.status(200).json({
+      success: true,
+      message: "Get assignment successfully",
+      data: assignment,
+    });
   },
 
-  getGrades: async (req: Request, res: Response) => {
-    try {
-      const grades = await AssignmentService.getGrades();
-
-      return res.status(200).json({
-        message: "Get grades successfully",
-        data: grades,
-      });
-    } catch (error) {
-      console.error(error);
-      return res.status(500).json({
-        message: "Failed to get grades",
-      });
+  getByUserId: async (req: Request, res: Response) => {
+    if (!req.user) {
+      throw new UnauthorizedError("Authentication required");
     }
+    const userId = req.user.id;
+    const assignments = await AssignmentService.getByTeacherId(userId);
+    return res.status(200).json({
+      success: true,
+      message: "Get assignments successfully",
+      data: assignments,
+    });
   },
+
+  update: async (req: Request, res: Response) => {
+    const assignmentId = Number(req.params.id);
+    if (Number.isNaN(assignmentId)) {
+      throw new BadRequestError("Invalid assignment ID");
+    }
+    if (!req.user) {
+      throw new UnauthorizedError("Authentication required");
+    }
+    const teacherId = req.user.id;
+    const assignment: AssignmentUpdateRequest = req.body;
+
+    await AssignmentService.updateAssignment(
+      assignmentId,
+      teacherId,
+      assignment
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Assignment updated successfully",
+    });
+  },
+
+  deleteById: async (req: Request, res: Response) => {
+    const assignmentId = Number(req.params.id);
+    if (!req.user) {
+      throw new UnauthorizedError("Authentication required");
+    }
+    const teacherId = req.user.id;
+
+    if (Number.isNaN(assignmentId)) {
+      throw new BadRequestError("Invalid assignment id");
+    }
+
+    await AssignmentService.deleteById(assignmentId, teacherId);
+
+    return res.status(200).json({
+      success: true,
+      message: "Assignment deleted successfully",
+    });
+  },
+
+  getGrades: async (_req: Request, res: Response) => {
+    const grades = await AssignmentService.getGrades();
+
+    return res.status(200).json({
+      success: true,
+      message: "Get grades successfully",
+      data: grades,
+    });
+  },
+
   getLessons: async (req: Request, res: Response) => {
-    try {
-      const gradeId = Number(req.query.gradeId);
-      const subjectId = Number(req.query.subjectId);
+    const gradeId = Number(req.query.gradeId);
+    const subjectId = Number(req.query.subjectId);
 
-      if (
-        !gradeId ||
-        Number.isNaN(gradeId) ||
-        !subjectId ||
-        Number.isNaN(subjectId)
-      ) {
-        return res.status(400).json({
-          message: "gradeId and subjectId are required"
-        });
-      }
-
-      const lessons = await AssignmentService.getLessons(
-        gradeId,
-        subjectId
-      );
-
-      return res.status(200).json(lessons);
-    } catch (error) {
-      console.error(error);
-
-      return res.status(500).json({
-        message: "Failed to get lessons"
-      });
+    if (
+      !gradeId ||
+      Number.isNaN(gradeId) ||
+      !subjectId ||
+      Number.isNaN(subjectId)
+    ) {
+      throw new BadRequestError("gradeId and subjectId are required");
     }
+
+    const lessons = await AssignmentService.getLessons(gradeId, subjectId);
+
+    return res.status(200).json({
+      success: true,
+      message: "Get lessons successfully",
+      data: lessons,
+    });
   },
+
   getSubjects: async (req: Request, res: Response) => {
-    try {
-      const gradeId = Number(req.query.gradeId);
+    const gradeId = Number(req.query.gradeId);
 
-      if (!gradeId || Number.isNaN(gradeId)) {
-        return res.status(400).json({
-          message: "gradeId is required",
-        });
-      }
-
-      const subjects = await AssignmentService.getSubject(gradeId);
-
-      return res.status(200).json(subjects);
-    } catch (error) {
-      console.error(error);
-      return res.status(500).json({
-        message: "Failed to get subjects"
-      });
+    if (!gradeId || Number.isNaN(gradeId)) {
+      throw new BadRequestError("gradeId is required");
     }
-  }
 
+    const subjects = await AssignmentService.getSubject(gradeId);
+
+    return res.status(200).json({
+      success: true,
+      message: "Get subjects successfully",
+      data: subjects,
+    });
+  },
 };
 
 export default AssignmentController;

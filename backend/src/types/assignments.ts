@@ -26,6 +26,7 @@ export interface Assignment {
   class_level: string;
   subject: string;
   duration_minutes: number;
+  status?: string;
   teacher_id: number;
   questions: Question[];
 }

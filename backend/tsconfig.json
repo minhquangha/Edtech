@@ -19,7 +19,7 @@
     // "lib": ["esnext"],
     // "types": ["node"],
     // and npm install -D @types/node
-    // Other Outputs
+    // Other Outputs 
     "outDir": "./dist",
     "sourceMap": true,
     "declaration": true,
@@ -45,11 +45,11 @@
   },
   "include": [
     "src/**/*.ts",
-    "test/**/*.ts"
+    "test/**/*.ts",
+    "scripts/**/*.ts"
   ],
   "exclude": [
     "node_modules",
-    "dist",
-    "scripts"
+    "dist"
   ]
 }

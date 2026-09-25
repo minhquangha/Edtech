@@ -66,6 +66,7 @@ model Assignment {
   assignmentQuestions AssignmentQuestion[]
   lessonAssignments   LessonAssignment[]
 
+  @@index([teacher_id], map: "idx_assignment_teacher_id")
   @@map("Assignment")
 }
 
@@ -106,6 +107,8 @@ model AssignmentQuestion {
   assignment    Assignment @relation(fields: [assignment_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_aq_assignment")
   question      Question   @relation(fields: [question_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_aq_question")
 
+  @@unique([assignment_id, question_id], map: "uq_assignment_question")
+  @@index([question_id], map: "idx_aq_question_id")
   @@map("Assignment_Question")
 }
 
@@ -118,6 +121,7 @@ model QuestionOption {
   updated_at  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   question    Question @relation(fields: [question_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_options_question")
 
+  @@index([question_id], map: "idx_options_question_id")
   @@map("Question_Options")
 }
 
@@ -125,7 +129,7 @@ model UploadedExam {
   id               Int                 @id(map: "uploaded_exam_pkey") @default(autoincrement())
   userId           Int                 @map("user_id")
   fileName         String              @map("file_name") @db.VarChar(255)
-  fileSize         BigInt?             @map("file_size")
+  fileSize         Int?                @map("file_size")
   mimeType         String?             @map("mime_type") @db.VarChar(100)
   rawText          String              @map("raw_text")
   extractionMethod extraction_method_t @map("extraction_method")
@@ -133,6 +137,7 @@ model UploadedExam {
   updatedAt        DateTime?           @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
   user             User                @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_uploaded_exam_user")
 
+  @@index([userId], map: "idx_uploaded_exam_user_id")
   @@map("Uploaded_Exam")
 }
 
