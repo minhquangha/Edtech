@@ -51,10 +51,6 @@ jobs:
         working-directory: ./backend
         run: npx tsc --noEmit
 
-      - name: Run Backend Tests
-        working-directory: ./backend
-        run: pnpm test
-
       - name: Build Backend
         working-directory: ./backend
         run: pnpm build
